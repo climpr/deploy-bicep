@@ -1,0 +1,135 @@
+name: Deploy Bicep deployment
+description: Parses a Bicep deployment based on the .bicepparam file and deploys to Azure
+
+inputs:
+  parameter-file-path:
+    description: The path to the .bicepparam file.
+    required: true
+  what-if:
+    description: Setting this to true will run the deployment commands in what-if mode.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install PS Modules
+      uses: climpr/install-psmodules@v0
+      with:
+        modules: |
+          Bicep:2.5.0
+
+    - name: Resolve deployment configuration
+      id: resolve-deploymentconfig
+      shell: pwsh
+      env:
+        parameterFilePath: ${{ inputs.parameter-file-path }}
+        actionPath: ${{ github.action_path }}
+        eventName: ${{ github.event_name }}
+        debug: ${{ runner.debug }}
+      run: |
+        #* Resolve-DeploymentConfig.ps1
+
+        #* Set debug preference from runner configuration
+        $DebugPreference = [bool]$env:debug ? "Continue" : "SilentlyContinue"
+
+        #* Parse deployment
+        $deploymentConfig = & "$($env:actionPath)/src/Resolve-DeploymentConfig.ps1" `
+          -ParameterFilePath $env:parameterFilePath `
+          -DefaultDeploymentConfigPath "$($env:actionPath)/default.deploymentconfig.json" `
+          -GitHubEventName $env:eventName
+
+        #* Write outputs
+        Write-Output "deploy=$($deploymentConfig.Deploy)" >> $env:GITHUB_OUTPUT
+        Write-Output "name=$($deploymentConfig.DeploymentName)" >> $env:GITHUB_OUTPUT
+        Write-Output "parameter-file=$($deploymentConfig.ParameterFile)" >> $env:GITHUB_OUTPUT
+        Write-Output "scope=$($deploymentConfig.DeploymentScope)" >> $env:GITHUB_OUTPUT
+        Write-Output "location=$($deploymentConfig.Location)" >> $env:GITHUB_OUTPUT
+        Write-Output "resource-group=$($deploymentConfig.ResourceGroupName)" >> $env:GITHUB_OUTPUT
+        Write-Output "management-group-id=$($deploymentConfig.ManagementGroupId)" >> $env:GITHUB_OUTPUT
+        Write-Output "azure-cli-version=$($deploymentConfig.AzureCliVersion)" >> $env:GITHUB_OUTPUT
+
+    - name: Bicep deployment
+      id: bicep-deployment
+      uses: azure/CLI@v2
+      with:
+        azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
+        inlineScript: |
+          set -euo pipefail
+          if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
+              deploymentOutput=$(az deployment group create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
+              deploymentOutput=$(az deployment sub create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "managementGroup" ]; then
+              deploymentOutput=$(az deployment mg create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --management-group-id '${{ steps.resolve-deploymentconfig.outputs.management-group-id }}' \
+                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "tenant" ]; then
+              deploymentOutput=$(az deployment tenant create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+          fi
+
+          sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
+          
+          if grep -q "ERROR:" stderr.txt; then
+              echo "::error::An error occurred during deployment. See error details in below"
+              cat stderr.txt
+              exit 1
+          fi
+
+          echo "$deploymentOutput"
+
+          echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
+
+    - name: Add info to the deployment file
+      id: deployment-info
+      if: inputs.what-if == 'true'
+      shell: bash
+      env:
+        parameterFile: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
+        scope: ${{ steps.resolve-deploymentconfig.outputs.scope }}
+      run: |
+        deployment_name=$(echo $parameterFile | awk -F '/' '{print $(NF-1)}')
+        echo "**Deployment Name: $deployment_name**" > commitMessageAndId.md
+        echo "**Deployment Environment: $(basename $parameterFile | awk -F '.' '{print $(NF-1)}')**" >> commitMessageAndId.md
+        echo "**Deployment Scope:** $scope" >> commitMessageAndId.md
+        echo "**Commit ID:** $(git rev-parse HEAD)" >> commitMessageAndId.md
+        echo "**Commit Message:** $(git log -1 --pretty=%B)" >> commitMessageAndId.md
+        cat deployment.md >> commitMessageAndId.md
+        mv commitMessageAndId.md deployment.md
+
+    - name: PR comment for what-if deployment
+      id: deployment-comment
+      if: inputs.what-if == 'true'
+      uses: mshick/add-pr-comment@v2
+      with:
+        message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
+        message-path: |
+          deployment.md
+
+outputs:
+  deployment-output:
+    description: JSON formatted output from the deployment command.
+    value: ${{ steps.bicep-deployment.outputs.deploymentOutput }}
