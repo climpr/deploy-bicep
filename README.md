@@ -30,7 +30,7 @@ steps:
 
   - name: Run Bicep deployments
     id: deploy-bicep
-    uses: climpr/deploy-bicep@v0
+    uses: climpr/deploy-bicep@v1
     with:
       parameter-file-path: <Path to .bicepparam file>
       what-if: "false"
@@ -80,14 +80,14 @@ jobs:
 
       - name: Get Bicep Deployments
         id: get-bicep-deployments
-        uses: climpr/get-bicep-deployments@v0
+        uses: climpr/get-bicep-deployments@v1
         with:
           deployments-root-directory: bicep-deployments
           pattern: sample-deployment
 
       - name: Run Bicep deployments
         id: deploy-bicep
-        uses: climpr/deploy-bicep@v0
+        uses: climpr/deploy-bicep@v1
         with:
           parameter-file-path: bicep-deployments/sample-deployment/prod.bicepparam
 ```
@@ -130,7 +130,7 @@ jobs:
 
       - name: Get Bicep Deployments
         id: get-bicep-deployments
-        uses: climpr/get-bicep-deployments@v0
+        uses: climpr/get-bicep-deployments@v1
         with:
           deployments-root-directory: bicep-deployments
           event-name: ${{ github.event_name }}
@@ -170,7 +170,7 @@ jobs:
 
       - name: Run Bicep deployments
         id: deploy-bicep
-        uses: climpr/deploy-bicep@v0
+        uses: climpr/deploy-bicep@v1
         with:
           parameter-file-path: ${{ matrix.ParameterFile }}
           what-if: "false"
