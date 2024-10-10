@@ -2,5 +2,9 @@
   "$schema": "https://raw.githubusercontent.com/climpr/climpr-schemas/main/schemas/v1.0.0/bicep-deployment/deploymentconfig.json#",
   "location": "westeurope",
   "azureCliVersion": "2.59.0",
-  "disabled": true
+  "triggers": {
+    "workflow_dispatch": {
+      "disabled": true
+    }
+  }
 }

@@ -68,7 +68,6 @@ $deploymentObject = [pscustomobject]@{
     AzureCliVersion   = $deploymentConfig.azureCliVersion
     DeploymentConfig  = $deploymentConfig
 }
-Write-Debug "[$deploymentName] deploymentObject: $($deploymentObject | ConvertTo-Json -Depth 1)"
 
 #* Exclude disabled deployments
 Write-Debug "[$deploymentName] Checking if deployment is disabled in deploymentconfig.json"
@@ -80,6 +79,8 @@ if ($deploymentConfig.triggers -and $deploymentConfig.triggers.ContainsKey($GitH
     $deploymentObject.Deploy = $false
     Write-Debug "[$deploymentName] Deployment is disabled for the current trigger [$GitHubEventName] in deploymentconfig.json. Deployment is skipped."
 }
+
+Write-Debug "[$deploymentName] deploymentObject: $($deploymentObject | ConvertTo-Json -Depth 3)"
 
 #* Print deploymentObject to console
 if (!$Quiet.IsPresent) {

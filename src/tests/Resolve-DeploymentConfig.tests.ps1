@@ -15,7 +15,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 ParameterFilePath           = "$mockDirectory/deployments/workload-local/dev.bicepparam"
                 DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
                 GitHubEventName             = "workflow_dispatch"
-                Quiet                       = $true
+                Quiet                       = $false
                 Debug                       = $true
             }
 
@@ -27,7 +27,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "Should have a DeploymentConfig.disabled property set to 'true'" {
-            $res.DeploymentConfig.disabled | Should -BeTrue
+            $res.Deploy | Should -BeFalse
         }
     }
 }
