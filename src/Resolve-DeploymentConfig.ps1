@@ -30,25 +30,25 @@ Write-Debug "Script root directory: $(Resolve-Path -Relative -Path $scriptRoot)"
 Import-Module $scriptRoot/support-functions.psm1 -Force
 
 #* Resolve files
-$paramFile = Get-Item -Path $ParameterFilePath
-$paramFileRelativePath = Resolve-Path -Relative -Path $paramFile.FullName
-$deploymentDirectory = $paramFile.Directory
+$parameterFile = Get-Item -Path $ParameterFilePath
+$parameterFileRelativePath = Resolve-Path -Relative -Path $parameterFile.FullName
+$environmentName = ($parameterFile.BaseName -split "\.")[0]
+$deploymentDirectory = $parameterFile.Directory
 $deploymentRelativePath = Resolve-Path -Relative -Path $deploymentDirectory.FullName
-$environmentName = $paramFile.BaseName.Split(".")[0]
-$paramFileName = $paramFile.Name
+$parameterFileName = $parameterFile.Name
 Write-Debug "[$($deploymentDirectory.Name)] Deployment directory path: $deploymentRelativePath"
-Write-Debug "[$($deploymentDirectory.Name)] Parameter file path: $paramFileRelativePath"
+Write-Debug "[$($deploymentDirectory.Name)] Parameter file path: $parameterFileRelativePath"
 
 #* Resolve deployment name
 $deploymentName = $deploymentDirectory.Name
 
 #* Create deployment objects
-Write-Debug "[$deploymentName][$environmentName] Processing parameter file: $paramFileRelativePath"
+Write-Debug "[$deploymentName][$environmentName] Processing parameter file: $parameterFileRelativePath"
 
 #* Get deploymentConfig
 $param = @{
     DeploymentDirectoryPath     = $deploymentRelativePath
-    ParameterFileName           = $paramFileName
+    ParameterFileName           = $parameterFileName
     DefaultDeploymentConfigPath = $DefaultDeploymentConfigPath
     Debug                       = ([bool]($PSBoundParameters.Debug))
 }
@@ -59,9 +59,9 @@ Write-Debug "[$deploymentName] Creating deploymentObject"
 $deploymentObject = [pscustomobject]@{
     Deploy            = $true
     DeploymentName    = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
-    ParameterFile     = $paramFileRelativePath
-    TemplateReference = Resolve-ParameterFileTarget -ParameterFilePath $paramFileRelativePath
-    DeploymentScope   = Resolve-TemplateDeploymentScope -ParameterFilePath $paramFileRelativePath -DeploymentConfig $deploymentConfig
+    ParameterFile     = $parameterFileRelativePath
+    TemplateReference = Resolve-ParameterFileTarget -ParameterFilePath $parameterFileRelativePath
+    DeploymentScope   = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
     Location          = $deploymentConfig.location
     ResourceGroupName = $deploymentConfig.resourceGroupName
     ManagementGroupId = $deploymentConfig.managementGroupId
