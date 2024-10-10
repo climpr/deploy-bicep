@@ -34,6 +34,8 @@ $paramFile = Get-Item -Path $ParameterFilePath
 $paramFileRelativePath = Resolve-Path -Relative -Path $paramFile.FullName
 $deploymentDirectory = $paramFile.Directory
 $deploymentRelativePath = Resolve-Path -Relative -Path $deploymentDirectory.FullName
+$environmentName = $paramFile.BaseName
+$paramFileName = $paramFile.Name
 Write-Debug "[$($deploymentDirectory.Name)] Deployment directory path: $deploymentRelativePath"
 Write-Debug "[$($deploymentDirectory.Name)] Parameter file path: $paramFileRelativePath"
 
@@ -41,13 +43,16 @@ Write-Debug "[$($deploymentDirectory.Name)] Parameter file path: $paramFileRelat
 $deploymentName = $deploymentDirectory.Name
 
 #* Create deployment objects
-Write-Debug "[$deploymentName][$($paramFile.BaseName)] Processing parameter file: $($paramFile.FullName)"
+Write-Debug "[$deploymentName][$environmentName] Processing parameter file: $paramFileRelativePath"
 
 #* Get deploymentConfig
-$deploymentConfig = Get-DeploymentConfig `
-    -DeploymentDirectoryPath $deploymentRelativePath `
-    -ParameterFileName $paramFile.Name `
-    -DefaultDeploymentConfigPath $DefaultDeploymentConfigPath
+$param = @{
+    DeploymentDirectoryPath     = $deploymentRelativePath
+    ParameterFileName           = $paramFileName
+    DefaultDeploymentConfigPath = $DefaultDeploymentConfigPath
+    Debug                       = ([bool]($PSBoundParameters.Debug))
+}
+$deploymentConfig = Get-DeploymentConfig @param
 
 #* Create deploymentObject
 Write-Debug "[$deploymentName] Creating deploymentObject"
@@ -61,6 +66,7 @@ $deploymentObject = [pscustomobject]@{
     ResourceGroupName = $deploymentConfig.resourceGroupName
     ManagementGroupId = $deploymentConfig.managementGroupId
     AzureCliVersion   = $deploymentConfig.azureCliVersion
+    DeploymentConfig  = $deploymentConfig
 }
 Write-Debug "[$deploymentName] deploymentObject: $($deploymentObject | ConvertTo-Json -Depth 1)"
 

@@ -14,6 +14,7 @@ function Get-DeploymentConfig {
         [string]
         $DefaultDeploymentConfigPath
     )
+    Write-Debug "[Get-DeploymentConfig()] Input parameters: $($PSBoundParameters | ConvertTo-Json -Depth 3)"
 
     #* Defaults
     $jsonDepth = 3
