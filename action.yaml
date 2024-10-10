@@ -52,6 +52,7 @@ runs:
     - name: Bicep deployment
       id: bicep-deployment
       uses: azure/CLI@v2
+      if: steps.resolve-deploymentconfig.outputs.deploy == 'true'
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
@@ -92,7 +93,7 @@ runs:
           fi
 
           sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
-          
+
           if grep -q "ERROR:" stderr.txt; then
               echo "::error::An error occurred during deployment. See error details in below"
               cat stderr.txt
