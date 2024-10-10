@@ -34,7 +34,7 @@ $paramFile = Get-Item -Path $ParameterFilePath
 $paramFileRelativePath = Resolve-Path -Relative -Path $paramFile.FullName
 $deploymentDirectory = $paramFile.Directory
 $deploymentRelativePath = Resolve-Path -Relative -Path $deploymentDirectory.FullName
-$environmentName = $paramFile.BaseName
+$environmentName = $paramFile.BaseName.Split(".")[0]
 $paramFileName = $paramFile.Name
 Write-Debug "[$($deploymentDirectory.Name)] Deployment directory path: $deploymentRelativePath"
 Write-Debug "[$($deploymentDirectory.Name)] Parameter file path: $paramFileRelativePath"
