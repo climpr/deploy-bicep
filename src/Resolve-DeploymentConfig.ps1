@@ -57,16 +57,20 @@ $deploymentConfig = Get-DeploymentConfig @param
 #* Create deploymentObject
 Write-Debug "[$deploymentName] Creating deploymentObject"
 $deploymentObject = [pscustomobject]@{
-    Deploy            = $true
-    DeploymentName    = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
-    ParameterFile     = $parameterFileRelativePath
-    TemplateReference = Resolve-ParameterFileTarget -ParameterFilePath $parameterFileRelativePath
-    DeploymentScope   = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
-    Location          = $deploymentConfig.location
-    ResourceGroupName = $deploymentConfig.resourceGroupName
-    ManagementGroupId = $deploymentConfig.managementGroupId
-    AzureCliVersion   = $deploymentConfig.azureCliVersion
-    DeploymentConfig  = $deploymentConfig
+    Deploy                          = $true
+    DeploymentName                  = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
+    ParameterFile                   = $parameterFileRelativePath
+    TemplateReference               = Resolve-ParameterFileTarget -ParameterFilePath $parameterFileRelativePath
+    DeploymentScope                 = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
+    Location                        = $deploymentConfig.location
+    ResourceGroupName               = $deploymentConfig.resourceGroupName
+    ManagementGroupId               = $deploymentConfig.managementGroupId
+    AzureCliVersion                 = $deploymentConfig.azureCliVersion
+    DeploymentStackOptIn            = $deploymentConfig.deploymentStack ? "true" : "false"
+    DeploymentStackDescription      = $deploymentConfig.deploymentStack.description
+    DeploymentStackDenySettingsMode = $deploymentConfig.deploymentStack.denySettingsMode
+    DeploymentStackActionOnUnmanage = $deploymentConfig.deploymentStack.actionOnUnmanage
+    DeploymentConfig                = $deploymentConfig
 }
 
 #* Exclude disabled deployments
