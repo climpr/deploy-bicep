@@ -192,7 +192,7 @@ function Resolve-TemplateDeploymentScope {
     else {
         #* Is local template
         Push-Location -Path $parameterFile.Directory.FullName
-        $templateFileContent = Get-Content -Path $ReferenceString -Raw
+        $templateFileContent = Get-Content -Path $ReferenceString
         Pop-Location
         
         #* Regex for finding 'targetScope' statement in template file
