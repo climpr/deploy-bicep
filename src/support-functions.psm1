@@ -90,7 +90,7 @@ function Resolve-ParameterFileTarget {
         $content = $ParameterFileContent
     }
     else {
-        $content = Get-Content -Path $ParameterFilePath -Raw
+        $content = Get-Content -Path $ParameterFilePath
     }
 
     $usingReference = ""
