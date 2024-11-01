@@ -123,11 +123,11 @@ function Resolve-TemplateDeploymentScope {
     $parameterFile = Get-Item -Path $ParameterFilePath
     $referenceString = Resolve-ParameterFileTarget -ParameterFilePath $ParameterFilePath
 
-    if ($ReferenceString -match "^(br|ts)[\/:]") {
+    if ($referenceString -match "^(br|ts)[\/:]") {
         #* Is remote template
 
         #* Resolve local cache path
-        if ($ReferenceString -match "^(br|ts)\/(.+?):(.+?):(.+?)$") {
+        if ($referenceString -match "^(br|ts)\/(.+?):(.+?):(.+?)$") {
             #* Is alias
 
             #* Get active bicepconfig.json
@@ -141,7 +141,7 @@ function Resolve-TemplateDeploymentScope {
             $version = $Matches[4]
             $modulePathElements = $($modulePath -split "/"; $templateName -split "/")
         }
-        elseif ($ReferenceString -match "^(br|ts):(.+?)/(.+?):(.+?)$") {
+        elseif ($referenceString -match "^(br|ts):(.+?)/(.+?):(.+?)$") {
             #* Is FQDN
             $type = $Matches[1]
             $registryFqdn = $Matches[2]
@@ -163,8 +163,8 @@ function Resolve-TemplateDeploymentScope {
                 Write-Debug "[Resolve-TemplateDeploymentScope()] Target template cached successfully."
             }
             else {
-                Write-Debug "[Resolve-TemplateDeploymentScope()] Target template failed to restore. Target reference string: '$ReferenceString'. Local cache path: '$cachePath'"
-                throw "Unable to restore target template '$ReferenceString'"
+                Write-Debug "[Resolve-TemplateDeploymentScope()] Target template failed to restore. Target reference string: '$referenceString'. Local cache path: '$cachePath'"
+                throw "Unable to restore target template '$referenceString'"
             }
         }
 
@@ -192,7 +192,7 @@ function Resolve-TemplateDeploymentScope {
     else {
         #* Is local template
         Push-Location -Path $parameterFile.Directory.FullName
-        $templateFileContent = Get-Content -Path $ReferenceString
+        $templateFileContent = Get-Content -Path $referenceString
         Pop-Location
         
         #* Regex for finding 'targetScope' statement in template file
