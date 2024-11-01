@@ -1,1 +1,1 @@
-using './main.bicep'
+using 'main.bicep'
