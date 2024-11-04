@@ -85,7 +85,10 @@ Describe "Resolve-DeploymentConfig.ps1" {
     Context "When using-keyword is commented before the actual using-keyword" {
         BeforeAll {
             Mock Get-DeploymentConfig {
-                return @{ 'managementGroupId' = 'mockMgmtGroupId' }
+                return @{
+                    'managementGroupId' = 'mockMgmtGroupId'
+                    'resourceGroupName' = 'mockResourceGroupName'
+                }
             }
 
             $script:param = @{
