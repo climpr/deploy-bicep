@@ -84,6 +84,10 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
     Context "When using-keyword is commented before the actual using-keyword" {
         BeforeAll {
+            Mock Get-DeploymentConfig {
+                return @{ 'managementGroupId' = 'mockMgmtGroupId' }
+            }
+
             $script:param = @{
                 ParameterFilePath           = "$mockDirectory/deployments/workload-local-comments/usingCommented.bicepparam"
                 DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
@@ -106,6 +110,10 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
     Context "When scope-keyword is commented before the actual scope-keyword" {
         BeforeAll {
+            Mock Get-DeploymentConfig {
+                return @{ 'managementGroupId' = 'mockMgmtGroupId' }
+            }
+
             $script:param = @{
                 ParameterFilePath           = "$mockDirectory/deployments/workload-local-comments/targetScopeCommented.bicepparam"
                 DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"

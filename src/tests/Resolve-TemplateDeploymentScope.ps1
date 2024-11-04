@@ -41,7 +41,7 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
         BeforeAll {
             $script:param = @{
                 ParameterFilePath = "$mockDirectory/deployments/workload-local-comments/usingCommented.bicepparam"
-                DeploymentConfig  = @{}
+                DeploymentConfig  = @{ 'managementGroupId' = 'mockMgmtGroupId' }
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
         }
@@ -55,7 +55,7 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
         BeforeAll {
             $script:param = @{
                 ParameterFilePath = "$mockDirectory/deployments/workload-local-comments/targetScopeCommented.bicepparam"
-                DeploymentConfig  = @{}
+                DeploymentConfig  = @{ 'managementGroupId' = 'mockMgmtGroupId' }
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
         }
