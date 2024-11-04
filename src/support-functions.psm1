@@ -280,7 +280,11 @@ function Get-ContentExcludingBicepComments {
     param (
         [Parameter(Mandatory)]
         [string]
-        $Path
+        $Path,
+
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $Raw
     )
     # Read the entire file content as a single string
     $content = Get-Content -Path $path -Raw
@@ -291,8 +295,10 @@ function Get-ContentExcludingBicepComments {
     # Remove single-line comments
     $content = $content -replace '//.*', ''
 
-    # Split the content into lines
-    $content = $content -split "`n"
+    if (-not $Raw){
+        # Split the content into lines
+        $content = $content -split "`n"
+    }
 
     return $content
 }
