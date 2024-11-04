@@ -283,16 +283,16 @@ function Get-ContentExcludingBicepComments {
         $Path
     )
     # Read the entire file content as a single string
-    $contentAsSingleString = Get-Content -Path $path -Raw
+    $content = Get-Content -Path $path -Raw
 
     # Remove block comments
-    $contentAsSingleString = $content -replace '/\*[\s\S]*?\*/', ''
+    $content = $content -replace '/\*[\s\S]*?\*/', ''
 
     # Remove single-line comments
     $content = $content -replace '//.*', ''
 
     # Split the content into lines
-    $content = $contentAsSingleString -split "`n"
+    $content = $content -split "`n"
 
     return $content
 }
