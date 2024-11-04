@@ -201,9 +201,9 @@ function Resolve-TemplateDeploymentScope {
         Pop-Location
 
         if ($templateMatchesRegex) {
+            $targetScope = $templateMatchesRegex.Matches.Groups[1].Value
             Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement found in template file content."
             Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($targetScope)'"
-            $targetScope = $templateMatchesRegex.Matches.Groups[1].Value
         }
         else {
             Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement not found in parameter file content. Defaulting to resourceGroup scope"
