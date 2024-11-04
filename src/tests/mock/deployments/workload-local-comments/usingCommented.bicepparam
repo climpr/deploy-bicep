@@ -1,5 +1,5 @@
-// using 'scopeCommented.bicep'
+// using 'targetScopeCommented.bicep'
 /* 
-using 'scopeCommented.bicep'
+using 'targetScopeCommented.bicep'
 */
 using 'usingCommented.bicep'
