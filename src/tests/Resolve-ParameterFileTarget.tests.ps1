@@ -8,7 +8,7 @@ Describe "Resolve-ParameterFileTarget" {
     Context "When the input is a file (ParameterFilePath)" {
         BeforeAll {
             $script:tempFile = New-TemporaryFile
-            "using 'main.bicep" | Out-File -Path $tempFile
+            "using 'main.bicep'" | Out-File -Path $tempFile
         }
 
         It "It should return 'main.bicep'" {

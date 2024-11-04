@@ -30,4 +30,99 @@ Describe "Resolve-DeploymentConfig.ps1" {
             $res.Deploy | Should -BeFalse
         }
     }
+    Context "When targetScope-keyword in template is not on line 1" {
+        BeforeAll {
+            $script:param = @{
+                ParameterFilePath           = "$mockDirectory/deployments/workload-local-comments/targetScopeLine2.bicepparam"
+                DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
+                GitHubEventName             = "workflow_dispatch"
+                Quiet                       = $true
+                Debug                       = $true
+            }
+
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @param
+        }
+
+        It "Should have a TemplateReference pointing to a targetScopeLine2" {
+            $res.TemplateReference | Should -Be 'targetScopeLine2.bicep'
+        }
+
+        It "Should have DeploymentScope like [subscription]" {
+            $res.DeploymentScope | Should -Be 'subscription'
+        }
+    }
+
+    Context "When using-keyword in parameterfile is not on line 1" {
+        BeforeAll {
+            Mock Get-DeploymentConfig {
+                return @{ 'managementGroupId' = 'mockMgmtGroupId' }
+            }
+
+            $script:param = @{
+                ParameterFilePath           = "$mockDirectory/deployments/workload-local-comments/usingLine2.bicepparam"
+                DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
+                GitHubEventName             = "workflow_dispatch"
+                Quiet                       = $true
+                Debug                       = $true
+            }
+
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @param
+        }
+
+        It "Should have a TemplateReference pointing to a usingLine2" {
+            $res.TemplateReference | Should -Be 'usingLine2.bicep'
+        }
+
+        It "Should have DeploymentScope like [managementGroup]" {
+            $res.DeploymentScope | Should -Be 'managementGroup'
+        }
+
+        It "Should have same ManagementGroupId as mock [mockMgmtGroupId]" {
+            $res.ManagementGroupId | Should -Be 'mockMgmtGroupId'
+        }
+    }
+
+    Context "When using-keyword is commented before the actual using-keyword" {
+        BeforeAll {
+            $script:param = @{
+                ParameterFilePath           = "$mockDirectory/deployments/workload-local-comments/usingCommented.bicepparam"
+                DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
+                GitHubEventName             = "workflow_dispatch"
+                Quiet                       = $true
+                Debug                       = $true
+            }
+
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @param
+        }
+
+        It "Should have a TemplateReference pointing to a usingCommented" {
+            $res.TemplateReference | Should -Be 'usingCommented.bicep'
+        }
+
+        It "Should have DeploymentScope like [resourceGroup]" {
+            $res.DeploymentScope | Should -Be 'resourceGroup'
+        }
+    }
+
+    Context "When scope-keyword is commented before the actual scope-keyword" {
+        BeforeAll {
+            $script:param = @{
+                ParameterFilePath           = "$mockDirectory/deployments/workload-local-comments/targetScopeCommented.bicepparam"
+                DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
+                GitHubEventName             = "workflow_dispatch"
+                Quiet                       = $true
+                Debug                       = $true
+            }
+
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @param
+        }
+
+        It "Should have a TemplateReference pointing to a usingCommented" {
+            $res.TemplateReference | Should -Be 'targetScopeCommented.bicep'
+        }
+
+        It "Should have DeploymentScope like [subscription]" {
+            $res.DeploymentScope | Should -Be 'subscription'
+        }
+    }
 }

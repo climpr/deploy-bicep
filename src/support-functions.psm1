@@ -86,16 +86,17 @@ function Resolve-ParameterFileTarget {
     #* Regex for finding 'using' statement in param file
     $regex = "^(?:\s)*?using(?:\s)*?(?:')(?:\s)*(.+?)(?:['\s])+?"
 
+    $contentMatchesRegex = $null
     if ($ParameterFileContent) {
-        $content = $ParameterFileContent
+        $contentMatchesRegex = Select-String -InputObject $ParameterFileContent -AllMatches -Pattern $regex
     }
     else {
-        $content = Get-Content -Path $ParameterFilePath
+        $contentMatchesRegex = Select-String -Path $ParameterFilePath -AllMatches -Pattern $regex
     }
 
     $usingReference = ""
-    if ($content -match $regex) {
-        $usingReference = $Matches[1]
+    if ($contentMatchesRegex) {
+        $usingReference = $contentMatchesRegex.Matches.Groups[1].Value
         Write-Debug "[Resolve-ParameterFileTarget()] Valid 'using' statement found in parameter file content."
         Write-Debug "[Resolve-ParameterFileTarget()] Resolved: '$usingReference'"
     }
@@ -192,16 +193,17 @@ function Resolve-TemplateDeploymentScope {
     else {
         #* Is local template
         Push-Location -Path $parameterFile.Directory.FullName
-        $templateFileContent = Get-Content -Path $referenceString
-        Pop-Location
         
         #* Regex for finding 'targetScope' statement in template file
         $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
+        $templateMatchesRegex = Select-String -Path $ReferenceString -AllMatches -Pattern $regex
 
-        if ($templateFileContent -match $regex) {
+        Pop-Location
+
+        if ($templateMatchesRegex) {
             Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement found in template file content."
-            Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($Matches[1])'"
-            $targetScope = $Matches[1]
+            Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($targetScope)'"
+            $targetScope = $templateMatchesRegex.Matches.Groups[1].Value
         }
         else {
             Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement not found in parameter file content. Defaulting to resourceGroup scope"
