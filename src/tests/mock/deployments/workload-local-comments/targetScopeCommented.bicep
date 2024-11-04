@@ -1,5 +1,14 @@
+
 // targetScope = 'managementGroup'
+
+                     //                   targetScope = 'managementGroup'
+
+// // // targetScope = 'managementGroup'
+
 /*
 targetScope = 'managementGroup'
+
+// targetScope = 'managementGroup'
+                     //                   targetScope = 'managementGroup'
 */
-targetScope = 'subscription'
+targetScope = /*'managementGroup'*/'subscription' //'managementGroup'

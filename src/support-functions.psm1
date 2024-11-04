@@ -91,7 +91,8 @@ function Resolve-ParameterFileTarget {
         $contentMatchesRegex = Select-String -InputObject $ParameterFileContent -AllMatches -Pattern $regex
     }
     else {
-        $contentMatchesRegex = Select-String -Path $ParameterFilePath -AllMatches -Pattern $regex
+        $content = Get-ContentExcludingBicepComments -Path $ParameterFilePath
+        $contentMatchesRegex = $content | Select-String -AllMatches -Pattern $regex
     }
 
     $usingReference = ""
@@ -196,7 +197,8 @@ function Resolve-TemplateDeploymentScope {
         
         #* Regex for finding 'targetScope' statement in template file
         $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
-        $templateMatchesRegex = Select-String -Path $ReferenceString -AllMatches -Pattern $regex
+        $content = Get-ContentExcludingBicepComments -Path $referenceString
+        $templateMatchesRegex = $content | Select-String -AllMatches -Pattern $regex
 
         Pop-Location
 
@@ -271,4 +273,28 @@ function Join-HashTable {
     }
     
     return $Hashtable2
+}
+
+function Get-ContentExcludingBicepComments {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string]
+        $Path
+    )
+    # Read the entire file content as a single string
+    $contentAsSingleString = Get-Content -Path $path -Raw
+
+    # Remove block comments
+    $contentAsSingleString = $content -replace '\s*\/\*[\s\S]*?\*\/', ''
+
+    # Split the content into lines
+    $content = $contentAsSingleString -split "`n"
+
+    # Remove single-line comments
+    foreach($line in $content){
+        $line -replace '^\s*\/\/.*$', ''
+    }
+
+    return $content
 }
