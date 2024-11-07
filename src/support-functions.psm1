@@ -76,32 +76,30 @@ function Resolve-ParameterFileTarget {
     param (
         [Parameter(Mandatory, ParameterSetName = 'Path')]
         [string]
-        $ParameterFilePath,
+        $Path,
 
         [Parameter(Mandatory, ParameterSetName = 'Content')]
-        [string]
-        $ParameterFileContent
+        $Content
     )
+
+    if ($Path) {
+        $Content = Get-Content -Path $Path
+    }
+    $cleanContent = ConvertTo-UncommentedBicep -Content $Content
 
     #* Regex for finding 'using' statement in param file
     $regex = "^(?:\s)*?using(?:\s)*?(?:')(?:\s)*(.+?)(?:['\s])+?"
 
-    if ($ParameterFileContent) {
-        $content = $ParameterFileContent
-    }
-    else {
-        $content = Get-Content -Path $ParameterFilePath -Raw
-    }
+    $contentMatchesRegex = $null
+    $contentMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
 
-    $usingReference = ""
-    if ($content -match $regex) {
-        $usingReference = $Matches[1]
-        Write-Debug "[Resolve-ParameterFileTarget()] Valid 'using' statement found in parameter file content."
-        Write-Debug "[Resolve-ParameterFileTarget()] Resolved: '$usingReference'"
-    }
-    else {
+    if (!$contentMatchesRegex) {
         throw "[Resolve-ParameterFileTarget()] Valid 'using' statement not found in parameter file content."
     }
+    
+    $usingReference = $contentMatchesRegex.Matches.Groups[1].Value
+    Write-Debug "[Resolve-ParameterFileTarget()] Valid 'using' statement found in parameter file content."
+    Write-Debug "[Resolve-ParameterFileTarget()] Resolved: '$usingReference'"
 
     return $usingReference
 }
@@ -121,13 +119,13 @@ function Resolve-TemplateDeploymentScope {
     $targetScope = ""
 
     $parameterFile = Get-Item -Path $ParameterFilePath
-    $referenceString = Resolve-ParameterFileTarget -ParameterFilePath $ParameterFilePath
+    $referenceString = Resolve-ParameterFileTarget -Path $ParameterFilePath
 
-    if ($ReferenceString -match "^(br|ts)[\/:]") {
+    if ($referenceString -match "^(br|ts)[\/:]") {
         #* Is remote template
 
         #* Resolve local cache path
-        if ($ReferenceString -match "^(br|ts)\/(.+?):(.+?):(.+?)$") {
+        if ($referenceString -match "^(br|ts)\/(.+?):(.+?):(.+?)$") {
             #* Is alias
 
             #* Get active bicepconfig.json
@@ -141,7 +139,7 @@ function Resolve-TemplateDeploymentScope {
             $version = $Matches[4]
             $modulePathElements = $($modulePath -split "/"; $templateName -split "/")
         }
-        elseif ($ReferenceString -match "^(br|ts):(.+?)/(.+?):(.+?)$") {
+        elseif ($referenceString -match "^(br|ts):(.+?)/(.+?):(.+?)$") {
             #* Is FQDN
             $type = $Matches[1]
             $registryFqdn = $Matches[2]
@@ -163,8 +161,8 @@ function Resolve-TemplateDeploymentScope {
                 Write-Debug "[Resolve-TemplateDeploymentScope()] Target template cached successfully."
             }
             else {
-                Write-Debug "[Resolve-TemplateDeploymentScope()] Target template failed to restore. Target reference string: '$ReferenceString'. Local cache path: '$cachePath'"
-                throw "Unable to restore target template '$ReferenceString'"
+                Write-Debug "[Resolve-TemplateDeploymentScope()] Target template failed to restore. Target reference string: '$referenceString'. Local cache path: '$cachePath'"
+                throw "Unable to restore target template '$referenceString'"
             }
         }
 
@@ -192,16 +190,19 @@ function Resolve-TemplateDeploymentScope {
     else {
         #* Is local template
         Push-Location -Path $parameterFile.Directory.FullName
-        $templateFileContent = Get-Content -Path $ReferenceString -Raw
-        Pop-Location
         
         #* Regex for finding 'targetScope' statement in template file
+        $content = Get-Content -Path $referenceString
+        $cleanContent = ConvertTo-UncommentedBicep -Content $content
         $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
+        $templateMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
 
-        if ($templateFileContent -match $regex) {
+        Pop-Location
+
+        if ($templateMatchesRegex) {
+            $targetScope = $templateMatchesRegex.Matches.Groups[1].Value
             Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement found in template file content."
-            Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($Matches[1])'"
-            $targetScope = $Matches[1]
+            Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($targetScope)'"
         }
         else {
             Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement not found in parameter file content. Defaulting to resourceGroup scope"
@@ -269,4 +270,28 @@ function Join-HashTable {
     }
     
     return $Hashtable2
+}
+
+
+function ConvertTo-UncommentedBicep {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        $Content
+    )
+    
+    #* Convert to single string
+    $rawContent = $Content -join [System.Environment]::NewLine
+
+    #* Remove block comments
+    $rawContent = $rawContent -replace '/\*[\s\S]*?\*/', ''
+
+    #* Remove single-line comments
+    $rawContent = $rawContent -replace '//.*', ''
+
+    #* Convert to array of strings
+    $contentArray = $rawContent -split [System.Environment]::NewLine
+
+    #* Return
+    $contentArray
 }

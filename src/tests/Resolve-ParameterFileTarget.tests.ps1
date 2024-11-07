@@ -5,14 +5,14 @@ BeforeAll {
 }
 
 Describe "Resolve-ParameterFileTarget" {
-    Context "When the input is a file (ParameterFilePath)" {
+    Context "When the input is a file (Path)" {
         BeforeAll {
             $script:tempFile = New-TemporaryFile
-            "using 'main.bicep" | Out-File -Path $tempFile
+            "using 'main.bicep'" | Out-File -Path $tempFile
         }
 
         It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -ParameterFilePath $tempFile
+            Resolve-ParameterFileTarget -Path $tempFile
         }
 
         AfterAll {
@@ -20,49 +20,49 @@ Describe "Resolve-ParameterFileTarget" {
         }
     }
 
-    Context "When the input is a string (ParameterFileContent)" {
+    Context "When the input is a string (Content)" {
         It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using 'main.bicep'" | Should -Be "main.bicep"
+            Resolve-ParameterFileTarget -Content "using 'main.bicep'" | Should -Be "main.bicep"
         }
     }
 
     Context "When the parameter file contains a properly formatted: `"using 'main.bicep'`"" {
         It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using 'main.bicep'" | Should -Be "main.bicep"
+            Resolve-ParameterFileTarget -Content "using 'main.bicep'" | Should -Be "main.bicep"
         }
     }
 
     Context "When the parameter file contains leading spaces: `"  using   '   main.bicep'`"" {
         It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using   '   main.bicep'" | Should -Be "main.bicep"
+            Resolve-ParameterFileTarget -Content "using   '   main.bicep'" | Should -Be "main.bicep"
         }
     }
 
     Context "When the parameter file does not contain spaces: `"using'main.bicep'`"" {
         It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using'main.bicep'" | Should -Be "main.bicep"
+            Resolve-ParameterFileTarget -Content "using'main.bicep'" | Should -Be "main.bicep"
         }
     }
 
     Context "When the parameter file contains relative paths with '.': `"using './main.bicep'`"" {
         It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using './main.bicep'" | Should -Be "./main.bicep"
+            Resolve-ParameterFileTarget -Content "using './main.bicep'" | Should -Be "./main.bicep"
         }
     }
 
     Context "When the parameter file contains relative paths with '/': `"using '/main.bicep'`"" {
         It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using '/main.bicep'" | Should -Be "/main.bicep"
+            Resolve-ParameterFileTarget -Content "using '/main.bicep'" | Should -Be "/main.bicep"
         }
     }
 
     Context "When the parameter file contains ACR or TS paths" {
         It "It should return 'br/public:filepath:tag'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using 'br/public:filepath:tag''" | Should -Be "br/public:filepath:tag"
+            Resolve-ParameterFileTarget -Content "using 'br/public:filepath:tag''" | Should -Be "br/public:filepath:tag"
         }
 
         It "It should return 'br:mcr.microsoft.com/bicep/filepath:tag'" {
-            Resolve-ParameterFileTarget -ParameterFileContent "using 'br:mcr.microsoft.com/bicep/filepath:tag''" | Should -Be "br:mcr.microsoft.com/bicep/filepath:tag"
+            Resolve-ParameterFileTarget -Content "using 'br:mcr.microsoft.com/bicep/filepath:tag''" | Should -Be "br:mcr.microsoft.com/bicep/filepath:tag"
         }
     }
 }
