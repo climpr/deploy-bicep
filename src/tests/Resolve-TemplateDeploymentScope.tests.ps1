@@ -1,7 +1,7 @@
 BeforeAll {
     Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
     Install-Module Bicep -MinimumVersion "2.5.0"
-    Import-Module $PSScriptRoot/../support-functions.psm1
+    Import-Module $PSScriptRoot/../support-functions.psm1 -Force
 }
 
 Describe "Resolve-TemplateDeploymentScope.ps1" {

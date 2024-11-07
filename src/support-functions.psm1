@@ -76,34 +76,30 @@ function Resolve-ParameterFileTarget {
     param (
         [Parameter(Mandatory, ParameterSetName = 'Path')]
         [string]
-        $ParameterFilePath,
+        $Path,
 
         [Parameter(Mandatory, ParameterSetName = 'Content')]
-        [string]
-        $ParameterFileContent
+        $Content
     )
+
+    if ($Path) {
+        $Content = Get-Content -Path $Path
+    }
+    $cleanContent = ConvertTo-UncommentedBicep -Content $Content
 
     #* Regex for finding 'using' statement in param file
     $regex = "^(?:\s)*?using(?:\s)*?(?:')(?:\s)*(.+?)(?:['\s])+?"
 
     $contentMatchesRegex = $null
-    if ($ParameterFileContent) {
-        $contentMatchesRegex = Select-String -InputObject $ParameterFileContent -AllMatches -Pattern $regex
-    }
-    else {
-        $content = Get-ContentExcludingBicepComments -Path $ParameterFilePath
-        $contentMatchesRegex = $content | Select-String -AllMatches -Pattern $regex
-    }
+    $contentMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
 
-    $usingReference = ""
-    if ($contentMatchesRegex) {
-        $usingReference = $contentMatchesRegex.Matches.Groups[1].Value
-        Write-Debug "[Resolve-ParameterFileTarget()] Valid 'using' statement found in parameter file content."
-        Write-Debug "[Resolve-ParameterFileTarget()] Resolved: '$usingReference'"
-    }
-    else {
+    if (!$contentMatchesRegex) {
         throw "[Resolve-ParameterFileTarget()] Valid 'using' statement not found in parameter file content."
     }
+    
+    $usingReference = $contentMatchesRegex.Matches.Groups[1].Value
+    Write-Debug "[Resolve-ParameterFileTarget()] Valid 'using' statement found in parameter file content."
+    Write-Debug "[Resolve-ParameterFileTarget()] Resolved: '$usingReference'"
 
     return $usingReference
 }
@@ -123,7 +119,7 @@ function Resolve-TemplateDeploymentScope {
     $targetScope = ""
 
     $parameterFile = Get-Item -Path $ParameterFilePath
-    $referenceString = Resolve-ParameterFileTarget -ParameterFilePath $ParameterFilePath
+    $referenceString = Resolve-ParameterFileTarget -Path $ParameterFilePath
 
     if ($referenceString -match "^(br|ts)[\/:]") {
         #* Is remote template
@@ -196,9 +192,10 @@ function Resolve-TemplateDeploymentScope {
         Push-Location -Path $parameterFile.Directory.FullName
         
         #* Regex for finding 'targetScope' statement in template file
+        $content = Get-Content -Path $referenceString
+        $cleanContent = ConvertTo-UncommentedBicep -Content $content
         $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
-        $content = Get-ContentExcludingBicepComments -Path $referenceString
-        $templateMatchesRegex = $content | Select-String -AllMatches -Pattern $regex
+        $templateMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
 
         Pop-Location
 
@@ -275,30 +272,26 @@ function Join-HashTable {
     return $Hashtable2
 }
 
-function Get-ContentExcludingBicepComments {
+
+function ConvertTo-UncommentedBicep {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [string]
-        $Path,
-
-        [Parameter(Mandatory = $false)]
-        [switch]
-        $Raw
+        $Content
     )
-    # Read the entire file content as a single string
-    $content = Get-Content -Path $path -Raw
+    
+    #* Convert to single string
+    $rawContent = $Content -join [System.Environment]::NewLine
 
-    # Remove block comments
-    $content = $content -replace '/\*[\s\S]*?\*/', ''
+    #* Remove block comments
+    $rawContent = $rawContent -replace '/\*[\s\S]*?\*/', ''
 
-    # Remove single-line comments
-    $content = $content -replace '//.*', ''
+    #* Remove single-line comments
+    $rawContent = $rawContent -replace '//.*', ''
 
-    if (-not $Raw){
-        # Split the content into lines
-        $content = $content -split "`n"
-    }
+    #* Convert to array of strings
+    $contentArray = $rawContent -split [System.Environment]::NewLine
 
-    return $content
+    #* Return
+    $contentArray
 }
