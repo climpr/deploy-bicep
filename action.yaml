@@ -40,19 +40,36 @@ runs:
           -GitHubEventName $env:eventName
 
         #* Write outputs
-        Write-Output "deploy=$($deploymentConfig.Deploy)" >> $env:GITHUB_OUTPUT
-        Write-Output "name=$($deploymentConfig.DeploymentName)" >> $env:GITHUB_OUTPUT
-        Write-Output "parameter-file=$($deploymentConfig.ParameterFile)" >> $env:GITHUB_OUTPUT
-        Write-Output "scope=$($deploymentConfig.DeploymentScope)" >> $env:GITHUB_OUTPUT
-        Write-Output "location=$($deploymentConfig.Location)" >> $env:GITHUB_OUTPUT
-        Write-Output "resource-group=$($deploymentConfig.ResourceGroupName)" >> $env:GITHUB_OUTPUT
-        Write-Output "management-group-id=$($deploymentConfig.ManagementGroupId)" >> $env:GITHUB_OUTPUT
-        Write-Output "azure-cli-version=$($deploymentConfig.AzureCliVersion)" >> $env:GITHUB_OUTPUT
+        $outputs = @{
+          Type                                      = "type"
+          DeploymentScope                           = "scope"
+          Deploy                                    = "deploy"
+          AzureCliVersion                           = "azure-cli-version"
+          ParameterFile                             = "parameter-file"
+          DeploymentName                            = "name"
+          Location                                  = "location"
+          ManagementGroupId                         = "management-group-id"
+          ResourceGroupName                         = "resource-group"
+          ActionOnUnmanage                          = "action-on-unmanage"
+          BypassStackOutOfSyncError                 = "bypass-stack-out-of-sync-error"
+          DenySettingsMode                          = "deny-settings-mode"
+          DenySettingsApplyToChildScopes            = "deny-settings-apply-to-child-scopes"
+          DenySettingsExcludedActionsAzCliString    = "deny-settings-excluded-actions"
+          DenySettingsExcludedPrincipalsAzCliString = "deny-settings-excluded-principals"
+          DeploymentResourceGroup                   = "deployment-resource-group"
+          DeploymentSubscription                    = "deployment-subscription"
+          Description                               = "description"
+          TagsAzCliString                           = "tags"
+        }
+
+        foreach ($output in $outputs.Keys) {
+          Write-Output "$($outputs[$output])=$($deploymentConfig.$output)" >> $env:GITHUB_OUTPUT
+        }
 
     - name: Bicep deployment
       id: bicep-deployment
       uses: azure/CLI@v2
-      if: steps.resolve-deploymentconfig.outputs.deploy == 'true'
+      if: steps.resolve-deploymentconfig.outputs.type == 'Deployment' && steps.resolve-deploymentconfig.outputs.deploy == 'true'
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
@@ -104,6 +121,78 @@ runs:
 
           echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
 
+    - name: Deployment Stack
+      id: deployment-stack
+      uses: azure/CLI@v2
+      if: steps.resolve-deploymentconfig.outputs.type == 'Stack' && steps.resolve-deploymentconfig.outputs.deploy == 'true' && inputs.what-if != 'true'
+      with:
+        azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
+        inlineScript: |
+          set -euo pipefail
+          if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
+              deploymentOutput=$(az stack group create \
+                --action-on-unmanage '${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}' \
+                --deny-settings-mode '${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
+                --bypass-stack-out-of-sync-error '${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}' \
+                ${{ (steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes == 'true') && '--deny-settings-apply-to-child-scopes' || '' }} \
+                --deny-settings-excluded-actions ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }} \
+                --deny-settings-excluded-principals ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }} \
+                --description '${{ steps.resolve-deploymentconfig.outputs.description }}' \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --tags ${{ steps.resolve-deploymentconfig.outputs.tags }} \
+                --yes \
+                --verbose \
+                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
+              deploymentOutput=$(az stack sub create \
+                --action-on-unmanage '${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}' \
+                --deny-settings-mode '${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
+                --bypass-stack-out-of-sync-error '${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}' \
+                ${{ (steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes == 'true') && '--deny-settings-apply-to-child-scopes' || '' }} \
+                --deny-settings-excluded-actions ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }} \
+                --deny-settings-excluded-principals ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }} \
+                --deployment-resource-group ${{ steps.resolve-deploymentconfig.outputs.deployment-resource-group }} \
+                --description '${{ steps.resolve-deploymentconfig.outputs.description }}' \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --tags ${{ steps.resolve-deploymentconfig.outputs.tags }} \
+                --yes \
+                --verbose \
+                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "managementGroup" ]; then
+              deploymentOutput=$(az stack mg create \
+                --action-on-unmanage '${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}' \
+                --deny-settings-mode '${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
+                --bypass-stack-out-of-sync-error '${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}' \
+                ${{ (steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes == 'true') && '--deny-settings-apply-to-child-scopes' || '' }} \
+                --deny-settings-excluded-actions ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }} \
+                --deny-settings-excluded-principals ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }} \
+                --deployment-subscription ${{ steps.resolve-deploymentconfig.outputs.deployment-subscription }} \
+                --description '${{ steps.resolve-deploymentconfig.outputs.description }}' \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --tags ${{ steps.resolve-deploymentconfig.outputs.tags }} \
+                --yes \
+                --verbose \
+                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+          fi
+
+          sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
+
+          if grep -q "ERROR:" stderr.txt; then
+              echo "::error::An error occurred during deployment. See error details in below"
+              cat stderr.txt
+              exit 1
+          fi
+
+          echo "$deploymentOutput"
+
+          echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
+
     - name: Add info to the deployment file
       id: deployment-info
       if: inputs.what-if == 'true'
@@ -123,7 +212,7 @@ runs:
 
     - name: PR comment for what-if deployment
       id: deployment-comment
-      if: inputs.what-if == 'true'
+      if: steps.resolve-deploymentconfig.outputs.type == 'Deployment' && inputs.what-if == 'true'
       uses: mshick/add-pr-comment@v2
       with:
         message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
@@ -134,3 +223,6 @@ outputs:
   deployment-output:
     description: JSON formatted output from the deployment command.
     value: ${{ steps.bicep-deployment.outputs.deploymentOutput }}
+  stack-output:
+    description: JSON formatted output from the deployment command.
+    value: ${{ steps.deployment-stack.outputs.deploymentOutput }}

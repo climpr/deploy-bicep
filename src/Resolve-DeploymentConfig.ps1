@@ -56,17 +56,53 @@ $deploymentConfig = Get-DeploymentConfig @param
 
 #* Create deploymentObject
 Write-Debug "[$deploymentName] Creating deploymentObject"
-$deploymentObject = [pscustomobject]@{
-    Deploy            = $true
-    DeploymentName    = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
-    ParameterFile     = $parameterFileRelativePath
-    TemplateReference = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
-    DeploymentScope   = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
-    Location          = $deploymentConfig.location
-    ResourceGroupName = $deploymentConfig.resourceGroupName
-    ManagementGroupId = $deploymentConfig.managementGroupId
-    AzureCliVersion   = $deploymentConfig.azureCliVersion
-    DeploymentConfig  = $deploymentConfig
+$deploymentType = $deploymentConfig.type
+
+if ($deploymentType -eq "deployment" -or !$deploymentType) {
+    $deploymentObject = [pscustomobject]@{
+        Type              = "Deployment"
+        Deploy            = $true
+        ParameterFile     = $parameterFileRelativePath
+        TemplateReference = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
+        DeploymentScope   = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
+        AzureCliVersion   = $deploymentConfig.azureCliVersion
+        DeploymentConfig  = $deploymentConfig
+        DeploymentName    = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
+        Location          = $deploymentConfig.location
+        ManagementGroupId = $deploymentConfig.managementGroupId
+        ResourceGroupName = $deploymentConfig.resourceGroupName
+    }
+}
+elseif ($deploymentType -eq "stack") {
+    $deploymentObject = [pscustomobject]@{
+        Type                                      = "Stack"
+        Deploy                                    = $true
+        ParameterFile                             = $parameterFileRelativePath
+        TemplateReference                         = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
+        DeploymentScope                           = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
+        AzureCliVersion                           = $deploymentConfig.azureCliVersion
+        DeploymentConfig                          = $deploymentConfig
+        DeploymentName                            = $deploymentConfig.name
+        Location                                  = $deploymentConfig.location
+        ManagementGroupId                         = $deploymentConfig.managementGroupId
+        ResourceGroupName                         = $deploymentConfig.resourceGroupName
+        ActionOnUnmanage                          = $deploymentConfig.actionOnUnmanage
+        BypassStackOutOfSyncError                 = $deploymentConfig.bypassStackOutOfSyncError ?? $false
+        DenySettingsMode                          = $deploymentConfig.denySettingsMode
+        DenySettingsApplyToChildScopes            = $deploymentConfig.denySettingsApplyToChildScopes ?? $false
+        DenySettingsExcludedActions               = $deploymentConfig.denySettingsExcludedActions
+        DenySettingsExcludedPrincipals            = $deploymentConfig.denySettingsExcludedPrincipals
+        DeploymentResourceGroup                   = $deploymentConfig.deploymentResourceGroup
+        DeploymentSubscription                    = $deploymentConfig.deploymentSubscription
+        Description                               = $deploymentConfig.description
+        Tags                                      = $deploymentConfig.tags
+        DenySettingsExcludedActionsAzCliString    = "'$($deploymentConfig.denySettingsExcludedActions -join " ")'"
+        DenySettingsExcludedPrincipalsAzCliString = "'$($deploymentConfig.denySettingsExcludedPrincipals -join " ")'"
+        TagsAzCliString                           = ($deploymentConfig.tags.Keys | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join ' '
+    }
+}
+else {
+    throw "Unknown deployment type."
 }
 
 #* Exclude disabled deployments
