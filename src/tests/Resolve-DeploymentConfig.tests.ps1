@@ -26,10 +26,11 @@ Describe "Resolve-DeploymentConfig.ps1" {
             $res.TemplateReference | Should -Be 'main.bicep'
         }
 
-        It "Should have a DeploymentConfig.disabled property set to 'true'" {
+        It "Should have Deploy property calculated to 'false'" {
             $res.Deploy | Should -BeFalse
         }
     }
+
     Context "When targetScope-keyword in template is not on line 1" {
         BeforeAll {
             $script:param = @{
@@ -134,6 +135,46 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
         It "Should have DeploymentScope like [subscription]" {
             $res.DeploymentScope | Should -Be 'subscription'
+        }
+    }
+
+    Context "With conflicting deploymentconfig files" {
+        BeforeAll {
+            $script:deploymentPath = "$mockDirectory/deployments/workload-multi-deploymentconfig"
+            $script:param = @{
+                ParameterFilePath           = "$mockDirectory/deployments/workload-multi-deploymentconfig/dev.bicepparam"
+                DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
+                GitHubEventName             = "workflow_dispatch"
+                Quiet                       = $true
+                Debug                       = $false
+            }
+            Copy-Item -Path "$deploymentPath/deploymentconfig.json" -Destination "$deploymentPath/deploymentconfig.jsonc"
+        }
+
+        It "Should throw 'Found multiple deploymentconfig files.'" {
+            { ./src/Resolve-DeploymentConfig.ps1 @param } | Should -Throw "*Found multiple deploymentconfig files.*"
+        }
+
+        AfterAll {
+            Remove-Item -Path "$script:deploymentPath/deploymentconfig.jsonc" -Confirm:$false
+        }
+    }
+
+    Context "With jsonc deploymentconfig file" {
+        BeforeAll {
+            $script:param = @{
+                ParameterFilePath           = "$mockDirectory/deployments/workload-jsonc-deploymentconfig/dev.bicepparam"
+                DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
+                GitHubEventName             = "schedule"
+                Quiet                       = $true
+                Debug                       = $false
+            }
+
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @param
+        }
+
+        It "Should have Deploy property calculated to 'false'" {
+            $res.Deploy | Should -BeFalse
         }
     }
 }

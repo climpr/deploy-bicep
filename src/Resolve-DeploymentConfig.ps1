@@ -106,14 +106,14 @@ else {
 }
 
 #* Exclude disabled deployments
-Write-Debug "[$deploymentName] Checking if deployment is disabled in deploymentconfig.json"
+Write-Debug "[$deploymentName] Checking if deployment is disabled in the deploymentconfig file."
 if ($deploymentConfig.disabled) {
     $deploymentObject.Deploy = $false
-    Write-Debug "[$deploymentName] Deployment is disabled for all triggers in deploymentconfig.json. Deployment is skipped."
+    Write-Debug "[$deploymentName] Deployment is disabled for all triggers in the deploymentconfig file. Deployment is skipped."
 }
 if ($deploymentConfig.triggers -and $deploymentConfig.triggers.ContainsKey($GitHubEventName) -and $deploymentConfig.triggers[$GitHubEventName].disabled) {
     $deploymentObject.Deploy = $false
-    Write-Debug "[$deploymentName] Deployment is disabled for the current trigger [$GitHubEventName] in deploymentconfig.json. Deployment is skipped."
+    Write-Debug "[$deploymentName] Deployment is disabled for the current trigger [$GitHubEventName] in the deploymentconfig file. Deployment is skipped."
 }
 
 Write-Debug "[$deploymentName] deploymentObject: $($deploymentObject | ConvertTo-Json -Depth 3)"
