@@ -56,7 +56,7 @@ runs:
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
-          set -euo pipefail
+          # set -euo pipefail
 
           #* Resource Group scope
           if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
