@@ -106,7 +106,7 @@ runs:
           cat stderr.txt
           echo "finished"
 
-          if [ grep -q "ERROR:" stderr.txt ]; then
+          if grep -q "ERROR:" stderr.txt; then
               echo "::error::An error occurred during deployment. See error details in below"
               cat stderr.txt
               exit 1
