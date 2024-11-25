@@ -102,10 +102,6 @@ runs:
 
           sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
 
-          echo "Writing stderr"
-          cat stderr.txt
-          echo "finished"
-
           if grep -q "ERROR:" stderr.txt; then
               echo "::error::An error occurred during deployment. See error details in below"
               cat stderr.txt
