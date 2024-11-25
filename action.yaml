@@ -56,7 +56,7 @@ runs:
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
-          # set -euo pipefail
+          set -euo pipefail
 
           #* Resource Group scope
           if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
@@ -102,15 +102,18 @@ runs:
 
           sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
 
-          if grep -q "ERROR:" stderr.txt; then
-              echo "::error::An error occurred during deployment. See error details in below"
-              cat stderr.txt
-              exit 1
-          fi
-
           echo "$deploymentOutput"
 
           echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
+
+    - name: Process error
+      shell: bash
+      run: |
+        if grep -q "ERROR:" stderr.txt; then
+            echo "::error::An error occurred during deployment. See error details in below"
+            cat stderr.txt
+            exit 1
+        fi
 
     - name: Add info to the deployment file
       id: deployment-info
