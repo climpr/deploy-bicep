@@ -66,8 +66,8 @@ runs:
           }
 
           #* Trap errors
-          # Set trap to call the cleanup function on ERR or EXIT
-          trap cleanup ERR EXIT
+          # Set trap to call the cleanup function on ERR
+          trap cleanup ERR
 
           #* Resource Group scope
           if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
