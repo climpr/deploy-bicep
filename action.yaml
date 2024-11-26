@@ -114,6 +114,7 @@ runs:
           #* Format markdown code block
           sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
 
+          #* Write the result to console
           echo "$deploymentOutput"
 
           #* Write as github output
