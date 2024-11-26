@@ -74,8 +74,8 @@ runs:
                 elif [[ $line == ERROR:* ]]; then
                     #* Extract the JSON from the ERROR message
                     json=${line#ERROR: }
-                    #* Pretty-print the JSON and apply red color to each line
-                    echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line; do
+                    #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                    echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
                         echo -e "\e[31m${json_line}\e[0m"
                     done
                 fi
