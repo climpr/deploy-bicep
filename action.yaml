@@ -62,7 +62,25 @@ runs:
           #* Cleanup function
           cleanup() {
             echo "::error::An error occurred during deployment. See error details in below"
-            cat stderr.txt
+            
+            # Input file
+            input_file="stderr.txt"
+
+            # Read the file line by line
+            while IFS= read -r line; do
+                if [[ $line == WARNING:* ]]; then
+                    # Extract the WARNING message and print it in yellow
+                    echo -e "\e[33m${line#WARNING: }\e[0m"
+                elif [[ $line == INFO:* ]]; then
+                    # Print the INFO message in the default color
+                    echo "${line#INFO: }"
+                elif [[ $line == ERROR:* ]]; then
+                    # Extract the JSON from the ERROR message
+                    json=${line#ERROR: }
+                    # Pretty-print the JSON in red
+                    echo -e "\e[31m$(echo "$json" | jq . 2>/dev/null || echo "$json")\e[0m"
+                fi
+            done < "$input_file"
           }
 
           #* Trap errors
