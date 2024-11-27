@@ -108,6 +108,7 @@ runs:
           #* Set trap to call the cleanup function on ERR
           trap print_stderr ERR
 
+          #* Run deployment command
           deploymentOutput=$({
             case $scope in
               "resourceGroup")
@@ -167,15 +168,11 @@ runs:
           echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_json}"
 
           #* Format markdown code block and output to deployment.md
-          #* Add '```diff' to the beginning
-          #* Add '```' to the end
-          #* Replaces '~' with '!'
-          #* Removes leading whitespace from each line
           sed \
-            -e '1s/^/```diff\n/' \ 
-            -e '$a```' \ 
-            -e 's/~/!/g' \ 
-            -e 's/^[ \t]*//' \ 
+            -e '1s/^/```diff\n/' \
+            -e '$a```' \
+            -e 's/~/!/g' \
+            -e 's/^[ \t]*//' \
             stdout.log > deployment.md
 
           #* Write as github output
