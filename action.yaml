@@ -87,10 +87,9 @@ runs:
                   #* Extract the JSON from the ERROR message
                   json=${line#ERROR: }
                   #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
-                  formatted_json=$(echo "$json" | jq . 2>/dev/null)
-                  #  | while IFS= read -r json_line || [[ -n $json_line ]]; do
-                  #   echo -e "\e[31m${json_line}\e[0m"
-                  # done)
+                  formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                    echo -e "\e[31m${json_line}\e[0m"
+                  done)
                   annotation_json=$(format_multiline_annotation "$formatted_json")
                   echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
                 fi
@@ -98,7 +97,7 @@ runs:
           }
 
           #* Set trap to call the cleanup function on ERR
-          trap print_stderr ERR EXIT
+          trap print_stderr ERR
 
           deploymentOutput=$({
             #* Resource Group scope
@@ -143,9 +142,6 @@ runs:
                 ${{ (runner.debug == '1') && '--debug' || '' }}
             fi
           } 2> >(tee stderr.log >&2) | tee stdout.log)
-
-          #* Pretty print stderr information and warning messages
-          print_stderr()
 
           #* Write the result to console
           echo "$deploymentOutput"
