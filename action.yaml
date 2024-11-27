@@ -58,7 +58,7 @@ runs:
         inlineScript: |
           #* Enable strict mode
           set -euo pipefail
-          
+
           #* Cleanup function
           cleanup() {
             echo "::error::An error occurred during deployment. See error details in below"
@@ -79,10 +79,10 @@ runs:
                         echo -e "\e[31m${json_line}\e[0m"
                     done
                 fi
-            done < stderr.txt
+            done < stderr.log
           }
-          #* Trap errors
-          # Set trap to call the cleanup function on ERR
+
+          #* Set trap to call the cleanup function on ERR
           trap cleanup ERR
 
           {
