@@ -162,7 +162,7 @@ runs:
           echo "$deploymentOutput"
 
           #* Write success annotation
-          formatted_json=$(echo "$json" | jq . 2>/dev/null
+          formatted_json=$(echo "$deploymentOutput" | jq . 2>/dev/null)
           annotation_json=$(format_multiline_annotation "$formatted_json")
           echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_json}"
 
