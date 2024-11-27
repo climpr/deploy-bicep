@@ -152,7 +152,7 @@ runs:
                 ;;
 
               *)
-                echo "::error::Undefined deployment scope."
+                echo "::error::Undefined deployment scope." >&2
                 exit 1
 
             esac
