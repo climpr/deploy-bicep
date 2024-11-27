@@ -85,7 +85,7 @@ runs:
           #* Set trap to call the cleanup function on ERR
           trap cleanup ERR
 
-          {
+          deploymentOutput=$({
             #* Resource Group scope
             if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
                 az deployment group create \
@@ -127,9 +127,12 @@ runs:
                 ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
                 ${{ (runner.debug == '1') && '--debug' || '' }}
             fi
-          } 2> >(tee stderr.log >&2) | tee stdout.log
+          } 2> >(tee stderr.log >&2) | tee stdout.log)
+          
+          #* Write the result to console
+          echo "$deploymentOutput"
 
-          #* Format markdown code block
+          #* Format markdown code block and output to deployment.md
           sed \
             -e '1s/^/```diff\n/' \
             -e '$a```' -e 's/~/!/g' \
@@ -137,7 +140,7 @@ runs:
             stdout.log > deployment.md
 
           #* Write as github output
-          echo "deploymentOutput=$(cat stdout.log)" >> "$GITHUB_OUTPUT"
+          echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
 
     - name: Add info to the deployment file
       id: deployment-info
