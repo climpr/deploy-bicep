@@ -59,83 +59,65 @@ runs:
           #* Enable strict mode
           set -euo pipefail
 
-          #* Cleanup function
-          cleanup() {
-            echo "::error::An error occurred during deployment. See error details in below"
-            
-            #* Read the file line by line
-            while IFS= read -r line; do
-                if [[ $line == WARNING:* ]]; then
-                    #* Extract the WARNING message and print it in yellow
-                    echo -e "\e[33m${line#WARNING: }\e[0m"
-                elif [[ $line == INFO:* ]]; then
-                    #* Print the INFO message in the default color
-                    echo "${line#INFO: }"
-                elif [[ $line == ERROR:* ]]; then
-                    #* Extract the JSON from the ERROR message
-                    json=${line#ERROR: }
-                    #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
-                    echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
-                        echo -e "\e[31m${json_line}\e[0m"
-                    done
-                fi
-            done < stderr.txt
-          }
-
-          #* Trap errors
-          # Set trap to call the cleanup function on ERR
-          trap cleanup ERR
-
           #* Resource Group scope
           if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
-            deploymentOutput=$(az deployment group create \
-              --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-              --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-              --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
-              --verbose \
-              ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-              ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+            {
+              az deployment group create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} \
+              2> >(tee stderr.log >&2); 
+            } | tee deployment.md
 
           #* Subscription scope
           elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
-            deploymentOutput=$(az deployment sub create \
-              --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-              --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-              --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
-              --verbose \
-              ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-              ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+            {
+              az deployment sub create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} \
+                2> >(tee stderr.log >&2); 
+            } | tee deployment.md
 
           #* Management Group scope
           elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "managementGroup" ]; then
-            deploymentOutput=$(az deployment mg create \
-              --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-              --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-              --management-group-id '${{ steps.resolve-deploymentconfig.outputs.management-group-id }}' \
-              --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
-              --verbose \
-              ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-              ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+            {
+              az deployment mg create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --management-group-id '${{ steps.resolve-deploymentconfig.outputs.management-group-id }}' \
+                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} \
+                2> >(tee stderr.log >&2); 
+            } | tee deployment.md
 
           #* Tenant scope
           elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "tenant" ]; then
-            deploymentOutput=$(az deployment tenant create \
-              --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-              --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-              --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
-              --verbose \
-              ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-              ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
+            {
+              az deployment tenant create \
+                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
+                --verbose \
+                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                ${{ (runner.debug == '1') && '--debug' || '' }} \
+                2> >(tee stderr.log >&2); 
+            } | tee deployment.md
           fi
 
           #* Format markdown code block
           sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
 
-          #* Write the result to console
-          echo "$deploymentOutput"
-
           #* Write as github output
-          echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
+          echo "deploymentOutput=$(cat deployment.md)" >> "$GITHUB_OUTPUT"
 
     - name: Add info to the deployment file
       id: deployment-info
