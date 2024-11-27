@@ -167,11 +167,15 @@ runs:
           echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_json}"
 
           #* Format markdown code block and output to deployment.md
+          #* Add '```diff' to the beginning
+          #* Add '```' to the end
+          #* Replaces '~' with '!'
+          #* Removes leading whitespace from each line
           sed \
-            -e '1s/^/```diff\n/' \ #* Add '```diff' to the beginning
-            -e '$a```' \ #* Add '```' to the end
-            -e 's/~/!/g' \ #* Replaces '~' with '!'
-            -e 's/^[ \t]*//' \ #* Removes leading whitespace from each line
+            -e '1s/^/```diff\n/' \ 
+            -e '$a```' \ 
+            -e 's/~/!/g' \ 
+            -e 's/^[ \t]*//' \ 
             stdout.log > deployment.md
 
           #* Write as github output
