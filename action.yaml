@@ -59,35 +59,31 @@ runs:
           #* Enable strict mode
           set -euo pipefail
 
-          #* Resource Group scope
-          if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
-            {
-              az deployment group create \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
-                --verbose \
-                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} \
-              2> >(tee stderr.log >&2); 
-            } | tee deployment.md
+          {
+            #* Resource Group scope
+            if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
+              {
+                az deployment group create \
+                  --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                  --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                  --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
+                  --verbose \
+                  ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                  ${{ (runner.debug == '1') && '--debug' || '' }}
 
-          #* Subscription scope
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
-            {
-              az deployment sub create \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
-                --verbose \
-                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} \
-                2> >(tee stderr.log >&2); 
-            } | tee deployment.md
+            #* Subscription scope
+            elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
+              {
+                az deployment sub create \
+                  --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
+                  --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
+                  --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
+                  --verbose \
+                  ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
+                  ${{ (runner.debug == '1') && '--debug' || '' }}
 
-          #* Management Group scope
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "managementGroup" ]; then
-            {
+            #* Management Group scope
+            elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "managementGroup" ]; then
               az deployment mg create \
                 --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
                 --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
@@ -95,23 +91,19 @@ runs:
                 --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
                 --verbose \
                 ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} \
-                2> >(tee stderr.log >&2); 
-            } | tee deployment.md
+                ${{ (runner.debug == '1') && '--debug' || '' }}
 
-          #* Tenant scope
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "tenant" ]; then
-            {
+            #* Tenant scope
+            elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "tenant" ]; then
               az deployment tenant create \
                 --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
                 --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
                 --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
                 --verbose \
                 ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} \
-                2> >(tee stderr.log >&2); 
-            } | tee deployment.md
-          fi
+                ${{ (runner.debug == '1') && '--debug' || '' }}
+            fi
+          } 2> >(tee stderr.log >&2) | tee stdout.log
 
           #* Format markdown code block
           sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
