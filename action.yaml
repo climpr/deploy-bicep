@@ -168,9 +168,9 @@ runs:
 
           #* Format markdown code block and output to deployment.md
           sed \
-            -e '1s/^/```diff\n/' \ #* Add ```diff to the beginning
-            -e '$a```' \ #* Add ``` to the end
-            -e 's/~/!/g' \ #* Replaces ~ with !
+            -e '1s/^/```diff\n/' \ #* Add '```diff' to the beginning
+            -e '$a```' \ #* Add '```' to the end
+            -e 's/~/!/g' \ #* Replaces '~' with '!'
             -e 's/^[ \t]*//' \ #* Removes leading whitespace from each line
             stdout.log > deployment.md
 
