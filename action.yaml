@@ -59,31 +59,45 @@ runs:
           #* Enable strict mode
           set -euo pipefail
 
-          #* Cleanup function
-          cleanup() {
-            echo "::error::An error occurred during deployment. See error details in below"
+          #* Multiline annotation replacement function
+          format_multiline_annotation() {
+            # Input: A multiline string
+            # Output: The string formatted for GitHub annotations
             
+            local input="$1"
+            
+            # Replace newlines with %0A to support multiline annotations in GitHub workflows
+            local formatted_string=$(echo "$input" | sed ':a;N;$!ba;s/\n/%0A/g')
+            
+            # Output the formatted string
+            echo "$formatted_string"
+          }
+
+          #* Cleanup function
+          print_stderr() {
             #* Read the file line by line
             while IFS= read -r line; do
                 if [[ $line == WARNING:* ]]; then
-                    #* Extract the WARNING message and print it in yellow
-                    echo -e "\e[33m${line#WARNING: }\e[0m"
+                  #* Extract the WARNING message and print it in yellow
+                  echo -e "\e[33m${line#WARNING: }\e[0m"
                 elif [[ $line == INFO:* ]]; then
-                    #* Print the INFO message in the default color
-                    echo "${line#INFO: }"
+                  #* Print the INFO message in the default color
+                  echo "${line#INFO: }"
                 elif [[ $line == ERROR:* ]]; then
-                    #* Extract the JSON from the ERROR message
-                    json=${line#ERROR: }
-                    #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
-                    echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
-                        echo -e "\e[31m${json_line}\e[0m"
-                    done
+                  #* Extract the JSON from the ERROR message
+                  json=${line#ERROR: }
+                  #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                  formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                    echo -e "\e[31m${json_line}\e[0m"
+                  done)
+                  annotation_json=$(format_multiline_annotation "$formatted_json")
+                  echo "::error::An error occurred during deployment. See error details in below%0A${formatted_json}"
                 fi
             done < stderr.log
           }
 
           #* Set trap to call the cleanup function on ERR
-          trap cleanup ERR
+          trap print_stderr ERR EXIT
 
           deploymentOutput=$({
             #* Resource Group scope
@@ -128,9 +142,15 @@ runs:
                 ${{ (runner.debug == '1') && '--debug' || '' }}
             fi
           } 2> >(tee stderr.log >&2) | tee stdout.log)
-          
+
+          #* Pretty print stderr information and warning messages
+          print_stderr()
+
           #* Write the result to console
           echo "$deploymentOutput"
+          
+          #* Write success annotation
+          echo "::notice::Bicep template successfully deployed."
 
           #* Format markdown code block and output to deployment.md
           sed \
