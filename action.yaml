@@ -127,13 +127,17 @@ runs:
                 ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
                 ${{ (runner.debug == '1') && '--debug' || '' }}
             fi
-          } 2> >(tee stderr.log >&2) | tee deployment.md
+          } 2> >(tee stderr.log >&2) | tee stdout.log
 
           #* Format markdown code block
-          sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
+          sed \
+            -e '1s/^/```diff\n/' \
+            -e '$a```' -e 's/~/!/g' \
+            -e 's/^[ \t]*//' \
+            stdout.log > deployment.md
 
           #* Write as github output
-          echo "deploymentOutput=$(cat deployment.md)" >> "$GITHUB_OUTPUT"
+          echo "deploymentOutput=$(cat stdout.log)" >> "$GITHUB_OUTPUT"
 
     - name: Add info to the deployment file
       id: deployment-info
