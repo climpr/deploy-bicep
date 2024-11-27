@@ -62,7 +62,6 @@ runs:
           {
             #* Resource Group scope
             if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
-              {
                 az deployment group create \
                   --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
                   --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
@@ -73,7 +72,6 @@ runs:
 
             #* Subscription scope
             elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
-              {
                 az deployment sub create \
                   --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
                   --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
