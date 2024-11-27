@@ -58,6 +58,32 @@ runs:
         inlineScript: |
           #* Enable strict mode
           set -euo pipefail
+          
+          #* Cleanup function
+          cleanup() {
+            echo "::error::An error occurred during deployment. See error details in below"
+            
+            #* Read the file line by line
+            while IFS= read -r line; do
+                if [[ $line == WARNING:* ]]; then
+                    #* Extract the WARNING message and print it in yellow
+                    echo -e "\e[33m${line#WARNING: }\e[0m"
+                elif [[ $line == INFO:* ]]; then
+                    #* Print the INFO message in the default color
+                    echo "${line#INFO: }"
+                elif [[ $line == ERROR:* ]]; then
+                    #* Extract the JSON from the ERROR message
+                    json=${line#ERROR: }
+                    #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                    echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                        echo -e "\e[31m${json_line}\e[0m"
+                    done
+                fi
+            done < stderr.txt
+          }
+          #* Trap errors
+          # Set trap to call the cleanup function on ERR
+          trap cleanup ERR
 
           {
             #* Resource Group scope
@@ -101,7 +127,7 @@ runs:
                 ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
                 ${{ (runner.debug == '1') && '--debug' || '' }}
             fi
-          } 2> >(tee stderr.log >&2) | tee stdout.log
+          } 2> >(tee stderr.log >&2) | tee deployment.md
 
           #* Format markdown code block
           sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
