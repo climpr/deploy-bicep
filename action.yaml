@@ -86,22 +86,22 @@ runs:
           print_stderr() {
             #* Read the file line by line
             while IFS= read -r line; do
-                if [[ $line == WARNING:* ]]; then
-                  #* Extract the WARNING message and print it in yellow
-                  echo -e "\e[33m${line#WARNING: }\e[0m"
-                elif [[ $line == INFO:* ]]; then
-                  #* Print the INFO message in the default color
-                  echo "${line#INFO: }"
-                elif [[ $line == ERROR:* ]]; then
-                  #* Extract the JSON from the ERROR message
-                  json=${line#ERROR: }
-                  #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
-                  formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
-                    echo -e "\e[31m${json_line}\e[0m"
-                  done)
-                  annotation_json=$(format_multiline_annotation "$formatted_json")
-                  echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
-                fi
+              if [[ $line == WARNING:* ]]; then
+                #* Extract the WARNING message and print it in yellow
+                echo -e "\e[33m${line#WARNING: }\e[0m"
+              elif [[ $line == INFO:* ]]; then
+                #* Print the INFO message in the default color
+                echo "${line#INFO: }"
+              elif [[ $line == ERROR:* ]]; then
+                #* Extract the JSON from the ERROR message
+                json=${line#ERROR: }
+                #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                  echo -e "\e[31m${json_line}\e[0m"
+                done)
+                annotation_json=$(format_multiline_annotation "$formatted_json")
+                echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
+              fi
             done < stderr.log
           }
 
@@ -162,7 +162,9 @@ runs:
           echo "$deploymentOutput"
 
           #* Write success annotation
-          echo "::notice::Bicep template successfully deployed."
+          formatted_json=$(echo "$json" | jq . 2>/dev/null
+          annotation_json=$(format_multiline_annotation "$formatted_json")
+          echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_json}"
 
           #* Format markdown code block and output to deployment.md
           sed \
@@ -197,8 +199,7 @@ runs:
       uses: mshick/add-pr-comment@v2
       with:
         message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
-        message-path: |
-          deployment.md
+        message-path: deployment.md
 
 outputs:
   deployment-output:
