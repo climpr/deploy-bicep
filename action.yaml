@@ -112,33 +112,34 @@ runs:
           trap print_stderr ERR
 
           #* Create deployment command
+          cmd=()
           case $SCOPE in
           resourceGroup)
-              cmd=("az deployment group create")
-              cmd+=("--resource-group \"$RESOURCE_GROUP\"")
-              ;;
+            cmd+=("az deployment group create")
+            cmd+=("--resource-group $RESOURCE_GROUP")
+            ;;
           subscription)
-              cmd=("az deployment sub create")
-              cmd+=("--location \"$LOCATION\"")
-              ;;
+            cmd+=("az deployment sub create")
+            cmd+=("--location $LOCATION")
+            ;;
           managementGroup)
-              cmd=("az deployment mg create")
-              cmd+=("--location \"$LOCATION\"")
-              cmd+=("--management-group-id \"$MANAGEMENT_GROUP_ID\"")
-              ;;
+            cmd+=("az deployment mg create")
+            cmd+=("--location $LOCATION")
+            cmd+=("--management-group-id $MANAGEMENT_GROUP_ID")
+            ;;
           tenant)
-              cmd=("az deployment tenant create")
-              cmd+=("--location \"$LOCATION\"")
-              ;;
+            cmd+=("az deployment tenant create")
+            cmd+=("--location $LOCATION")
+            ;;
           *)
-              echo "::error::Unknown deployment scope." >&2
-              exit 1
-              ;;
+            echo "::error::Unknown deployment scope." >&2
+            exit 1
+            ;;
           esac
 
           #* Add common parameters
-          cmd+=("--parameters \"$PARAMETER_FILE\"")
-          cmd+=("--name \"$DEPLOYMENT_NAME\"")
+          cmd+=("--parameters $PARAMETER_FILE")
+          cmd+=("--name $DEPLOYMENT_NAME")
           cmd+=("--verbose")
           cmd+=($([[ $WHAT_IF == 'true' ]] && echo "--what-if" || echo ""))
           cmd+=($([[ $DEBUG == 'true' ]] && echo "--debug" || echo ""))
@@ -146,9 +147,9 @@ runs:
           #* Print command
           echo "Running command:"
           printf "\n%s\n" "$(
-              printf "%s \\\\\n" "${cmd[@]}" |                #* Print each array element followed by " \\"
-                  awk 'NR==1 {print; next} {print "  " $0}' | #* Add two spaces before all lines except the first
-                  sed '$ s/ \\$//'                            #* Remove the trailing slash from the last line
+            printf "%s \\\\\n" "${cmd[@]}" |              #* Print each array element followed by " \\"
+              awk 'NR==1 {print; next} {print "  " $0}' | #* Add two spaces before all lines except the first
+              sed '$ s/ \\$//'                            #* Remove the trailing slash from the last line
           )"
 
           #* Run deployment command
