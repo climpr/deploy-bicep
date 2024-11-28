@@ -49,6 +49,14 @@ runs:
         Write-Output "management-group-id=$($deploymentConfig.ManagementGroupId)" >> $env:GITHUB_OUTPUT
         Write-Output "azure-cli-version=$($deploymentConfig.AzureCliVersion)" >> $env:GITHUB_OUTPUT
 
+    - name: Copy required files from action directory
+      shell: pwsh
+      env:
+        actionPath: ${{ github.action_path }}
+      run: |
+        New-Item -ItemType Directory "actionsrc" | Out-Null
+        Copy-Item "$($env:actionPath)/src/*" "actionsrc/" -Recurse -Force
+
     - name: Bicep deployment
       id: bicep-deployment
       uses: azure/CLI@v2
@@ -67,11 +75,7 @@ runs:
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
-          # chmod +x $ACTION_PATH/src/deploy-bicep.sh
-          # $ACTION_PATH/src/deploy-bicep.sh
-
-          tree $ACTION_PATH
-          tree
+          ./actionsrc/deploy-bicep.sh
 
     - name: Add info to the deployment file
       id: deployment-info
@@ -97,6 +101,15 @@ runs:
       with:
         message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
         message-path: deployment.md
+
+    - name: Clean created files
+      shell: bash
+      run: |
+        rm -rf actionsrc
+        rm -f deployment.md
+        rm -f commitMessageAndId.md
+        rm -f stdout.log
+        rm -f stderr.log
 
 outputs:
   deployment-output:
