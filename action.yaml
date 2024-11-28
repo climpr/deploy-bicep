@@ -152,7 +152,7 @@ runs:
           )"
 
           #* Run deployment command
-          deploymentOutput=$("${cmd[@]}" 2> >(tee stderr.log >&2) | tee stdout.log)
+          deploymentOutput=$($(echo "${cmd[@]}") 2> >(tee stderr.log >&2) | tee stdout.log)
 
           #* Write the result to console
           echo "$deploymentOutput"
