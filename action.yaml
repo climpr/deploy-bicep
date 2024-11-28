@@ -117,8 +117,8 @@ runs:
                   --name "$deployment_name" \
                   --resource-group "$resource_group" \
                   --verbose \
-                  $( [ $what_if = 'true' ] && echo "--what-if" ) \
-                  $( [ $debug = '1' ] && echo "--debug" )
+                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
+                  $( [[ $debug -eq 1 ]] && echo "--debug" )
                 ;;
 
               "subscription")
@@ -127,8 +127,8 @@ runs:
                   --name "$deployment_name" \
                   --location "$location" \
                   --verbose \
-                  $( [ $what_if = 'true' ] && echo "--what-if" ) \
-                  $( [ $debug = '1' ] && echo "--debug" )
+                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
+                  $( [[ $debug -eq 1 ]] && echo "--debug" )
                 ;;
 
               "managementGroup")
@@ -138,8 +138,8 @@ runs:
                   --management-group-id "$management_group_id" \
                   --location "$location" \
                   --verbose \
-                  $( [ $what_if = 'true' ] && echo "--what-if" ) \
-                  $( [ $debug = '1' ] && echo "--debug" )
+                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
+                  $( [[ $debug -eq 1 ]] && echo "--debug" )
                 ;;
 
               "tenant")
@@ -148,8 +148,8 @@ runs:
                   --name "$deployment_name" \
                   --location "$location" \
                   --verbose \
-                  $( [ $what_if = 'true' ] && echo "--what-if" ) \
-                  $( [ $debug = '1' ] && echo "--debug" )
+                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
+                  $( [[ $debug -eq 1 ]] && echo "--debug" )
                 ;;
 
               *)
