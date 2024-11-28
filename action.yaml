@@ -146,7 +146,7 @@ runs:
 
           #* Print command
           echo "Running command:"
-          printf "\n%s\n" "$(
+          printf "%s\n" "$(
             printf "%s \\\\\n" "${cmd[@]}" |              #* Print each array element followed by " \\"
               awk 'NR==1 {print; next} {print "  " $0}' | #* Add two spaces before all lines except the first
               sed '$ s/ \\$//'                            #* Remove the trailing slash from the last line
@@ -173,7 +173,6 @@ runs:
 
           #* Write as github output
           echo "deploymentOutput=$(echo $deploymentOutput)" >>"$GITHUB_OUTPUT"
-
 
     - name: Add info to the deployment file
       id: deployment-info
