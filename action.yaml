@@ -70,40 +70,40 @@ runs:
 
           #* Multiline annotation replacement function
           format_multiline_annotation() {
-              #* Input: A multiline string
-              #* Output: The string formatted for GitHub annotations
+            #* Input: A multiline string
+            #* Output: The string formatted for GitHub annotations
 
-              local input="$1"
+            local input="$1"
 
-              #* Replace newlines with %0A to support multiline annotations in GitHub workflows
-              local formatted_string=$(echo "$input" | sed ':a;N;$!ba;s/\n/%0A/g')
+            #* Replace newlines with %0A to support multiline annotations in GitHub workflows
+            local formatted_string=$(echo "$input" | sed ':a;N;$!ba;s/\n/%0A/g')
 
-              #* Output the formatted string
-              echo "$formatted_string"
+            #* Output the formatted string
+            echo "$formatted_string"
           }
 
           #* Cleanup function
           touch stderr.log
           print_stderr() {
-              #* Read the file line by line
-              while IFS= read -r line; do
-                  if [[ $line == WARNING:* ]]; then
-                      #* Extract the WARNING message and print it in yellow
-                      echo -e "\e[33m${line#WARNING: }\e[0m"
-                  elif [[ $line == INFO:* ]]; then
-                      #* Print the INFO message in the default color
-                      echo "${line#INFO: }"
-                  elif [[ $line == ERROR:* ]]; then
-                      #* Extract the JSON from the ERROR message
-                      json=${line#ERROR: }
-                      #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
-                      formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
-                          echo -e "\e[31m${json_line}\e[0m"
-                      done)
-                      annotation_json=$(format_multiline_annotation "$formatted_json")
-                      echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
-                  fi
-              done <stderr.log
+            #* Read the file line by line
+            while IFS= read -r line; do
+              if [[ $line == WARNING:* ]]; then
+                #* Extract the WARNING message and print it in yellow
+                echo -e "\e[33m${line#WARNING: }\e[0m"
+              elif [[ $line == INFO:* ]]; then
+                #* Print the INFO message in the default color
+                echo "${line#INFO: }"
+              elif [[ $line == ERROR:* ]]; then
+                #* Extract the JSON from the ERROR message
+                json=${line#ERROR: }
+                #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                  echo -e "\e[31m${json_line}\e[0m"
+                done)
+                annotation_json=$(format_multiline_annotation "$formatted_json")
+                echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
+              fi
+            done <stderr.log
           }
 
           #* Set trap to call the cleanup function on ERR
@@ -163,11 +163,11 @@ runs:
 
           #* Format markdown code block and output to deployment.md
           sed \
-              -e '1s/^/```diff\n/' \
-              -e '$a```' \
-              -e 's/~/!/g' \
-              -e 's/^[ \t]*//' \
-              stdout.log >deployment.md
+            -e '1s/^/```diff\n/' \
+            -e '$a```' \
+            -e 's/~/!/g' \
+            -e 's/^[ \t]*//' \
+            stdout.log >deployment.md
 
           #* Write as github output
           echo "deploymentOutput=$(echo $deploymentOutput)" >>"$GITHUB_OUTPUT"
