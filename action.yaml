@@ -108,56 +108,49 @@ runs:
           #* Set trap to call the cleanup function on ERR
           trap print_stderr ERR
 
+          #* Create deployment command
+          cmd=()
+          case $scope in 
+            resourceGroup)
+              cmd+=("az deployment group create")
+              cmd+=("--resource-group \"$resource_group\"")
+            ;;
+            subscription)
+              cmd+=("az deployment sub create")
+              cmd+=("--location \"$location\"")
+            ;;
+            managementGroup)
+              cmd+=("az deployment mg create")
+              cmd+=("--location \"$location\"")
+              cmd+=("--management-group-id \"$management_group_id\"")
+            ;;
+            tenant)
+              cmd+=("az deployment tenant create")
+              cmd+=("--location \"$location\"")
+            ;;
+            *)
+              echo "::error::Unknown deployment scope." >&2
+              exit 1
+            ;;
+          esac
+
+          #* Add common parameters
+          cmd+=("--parameters \"$parameter_file\"")
+          cmd+=("--name \"$deployment_name\"")
+          cmd+=("--verbose")
+          cmd+=($( [[ $what_if == 'true' ]] && echo "--what-if" || "" ))
+          cmd+=($( [[ $debug -eq 1 ]] && echo "--debug" || "" ))
+
+          #* Print command
+          echo "Running command:"
+          printf "\n%s\n" "$(
+            printf "%s \\\\\n" "${cmd[@]}" |            #* Print each array element followed by " \\"
+            awk 'NR==1 {print; next} {print "  " $0}' | #* Add two spaces before all lines except the first
+            sed '$ s/ \\$//'                            #* Remove the trailing slash from the last line
+          )"
+
           #* Run deployment command
-          deploymentOutput=$({
-            case $scope in
-              "resourceGroup")
-                az deployment group create \
-                  --parameters "$parameter_file" \
-                  --name "$deployment_name" \
-                  --resource-group "$resource_group" \
-                  --verbose \
-                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
-                  $( [[ $debug -eq 1 ]] && echo "--debug" )
-                ;;
-
-              "subscription")
-                az deployment sub create \
-                  --parameters "$parameter_file" \
-                  --name "$deployment_name" \
-                  --location "$location" \
-                  --verbose \
-                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
-                  $( [[ $debug -eq 1 ]] && echo "--debug" )
-                ;;
-
-              "managementGroup")
-                az deployment mg create \
-                  --parameters "$parameter_file" \
-                  --name "$deployment_name" \
-                  --management-group-id "$management_group_id" \
-                  --location "$location" \
-                  --verbose \
-                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
-                  $( [[ $debug -eq 1 ]] && echo "--debug" )
-                ;;
-
-              "tenant")
-                az deployment tenant create \
-                  --parameters "$parameter_file" \
-                  --name "$deployment_name" \
-                  --location "$location" \
-                  --verbose \
-                  $( [[ $what_if == 'true' ]] && echo "--what-if" ) \
-                  $( [[ $debug -eq 1 ]] && echo "--debug" )
-                ;;
-
-              *)
-                echo "::error::Undefined deployment scope." >&2
-                exit 1
-
-            esac
-          } 2> >(tee stderr.log >&2) | tee stdout.log)
+          deploymentOutput=$("${cmd[@]} 2> >(tee stderr.log >&2) | tee stdout.log")
 
           #* Write the result to console
           echo "$deploymentOutput"
