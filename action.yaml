@@ -62,8 +62,6 @@ runs:
         LOCATION: ${{ steps.resolve-deploymentconfig.outputs.location }}
         WHAT_IF: ${{ inputs.what-if }}
         DEBUG: ${{ runner.debug == '1' }}
-        GITHUB_OUTPUT: $GITHUB_OUTPUT
-        ACTION_PATH: ${{ github.action_path }}
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
