@@ -67,8 +67,11 @@ runs:
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
-          chmod +x $ACTION_PATH/src/deploy-bicep.sh
-          $ACTION_PATH/src/deploy-bicep.sh
+          # chmod +x $ACTION_PATH/src/deploy-bicep.sh
+          # $ACTION_PATH/src/deploy-bicep.sh
+
+          tree $ACTION_PATH
+          tree
 
     - name: Add info to the deployment file
       id: deployment-info
