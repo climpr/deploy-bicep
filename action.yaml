@@ -63,10 +63,11 @@ runs:
         WHAT_IF: ${{ inputs.what-if }}
         DEBUG: ${{ runner.debug }}
         GITHUB_OUTPUT: $GITHUB_OUTPUT
+        ACTION_PATH: ${{ github.action_path }}
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
-          ./src/deploy-bicep.sh
+          $ACTION_PATH/src/deploy-bicep.sh
 
     - name: Add info to the deployment file
       id: deployment-info
