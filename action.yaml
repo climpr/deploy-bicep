@@ -85,23 +85,51 @@ runs:
           #* Cleanup function
           touch stderr.log
           print_stderr() {
-            #* Read the file line by line
-            while IFS= read -r line; do
-              if [[ $line == WARNING:* ]]; then
-                #* Extract the WARNING message and print it in yellow
-                echo -e "\e[33m${line#WARNING: }\e[0m"
-              elif [[ $line == INFO:* ]]; then
-                #* Print the INFO message in the default color
-                echo "${line#INFO: }"
-              elif [[ $line == ERROR:* ]]; then
-                #* Extract the JSON from the ERROR message
-                json=${line#ERROR: }
-                #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
-                formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
-                  echo -e "\e[31m${json_line}\e[0m"
-                done)
-                annotation_json=$(format_multiline_annotation "$formatted_json")
-                echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
+            echo "start"
+            cat stderr.log
+            echo "stop"
+
+            current_entry=""
+            while IFS= read -r line || [[ -n $line ]]; do
+              if [[ $line =~ ^[^:]+: ]]; then
+                #* New entry starts; process the previous entry
+                if [[ -n $current_entry ]]; then
+                  #* Extract prefix and message
+                  local prefix="${current_entry%%:*}"  #* Text before the first colon
+                  local message="${current_entry#*: }" #* Text after the first colon and space
+
+                  #* Choose color based on prefix
+                  local color=""
+                  case "$prefix" in
+                  WARNING) color="\e[33m" ;; #* Yellow
+                  ERROR) color="\e[31m" ;;   #* Red
+                  *) color="\e[37m" ;;       #* Default (white/gray)
+                  esac
+
+                  #* Check if message is JSON
+                  if echo "$message" | jq -e . >/dev/null 2>&1; then
+                    #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                    formatted_json=$(echo "$message" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                      echo -e "${color}${json_line}\e[0m"
+                    done)
+
+
+                    #* Print GitHub annotation
+                    if [[ $prefix == "ERROR" ]]; then
+                      annotation_json=$(format_multiline_annotation "$formatted_json")
+                      echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
+                    fi
+
+                  else
+                    #* Not JSON: Print the raw message with color
+                    echo -e "${color}${prefix}: ${message}\e[0m"
+                  fi
+                fi
+                #* Start a new log entry
+                current_entry="$line"
+              else
+                #* Continuation of the current entry
+                current_entry+=" $line"
               fi
             done <stderr.log
           }
@@ -151,15 +179,24 @@ runs:
           )"
 
           #* Run deployment command
-          deploymentOutput=$($(echo "${cmd[@]}") 2> >(tee stderr.log >&2) | tee stdout.log)
+          deployment_output=$(${cmd[@]} 2> >(tee stderr.log >&2) | tee stdout.log)
 
           #* Write the result to console
-          echo "$deploymentOutput"
+          echo "$deployment_output"
 
           #* Write success annotation
-          formatted_json=$(echo "$deploymentOutput" | jq . 2>/dev/null)
-          annotation_json=$(format_multiline_annotation "$formatted_json")
-          echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_json}"
+          if echo "$deployment_output" | jq -e . >/dev/null 2>&1; then
+            formatted_message=$(echo "$deployment_output" | jq . 2>/dev/null)
+          else
+            formatted_message=$deployment_output
+          fi
+          annotation_message=$(format_multiline_annotation "$formatted_message")
+
+          if [[ $WHAT_IF == 'true' ]]; then
+            echo "::notice::Bicep what-if results:%0A${annotation_message}"
+          else
+            echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_message}"
+          fi
 
           #* Format markdown code block and output to deployment.md
           sed \
@@ -170,7 +207,7 @@ runs:
             stdout.log >deployment.md
 
           #* Write as github output
-          echo "deploymentOutput=$(echo $deploymentOutput)" >>"$GITHUB_OUTPUT"
+          echo "deployment-output=$(echo $deployment_output)" >>"$GITHUB_OUTPUT"
 
     - name: Add info to the deployment file
       id: deployment-info
@@ -208,4 +245,4 @@ runs:
 outputs:
   deployment-output:
     description: JSON formatted output from the deployment command.
-    value: ${{ steps.bicep-deployment.outputs.deploymentOutput }}
+    value: ${{ steps.bicep-deployment.outputs.deployment-output }}
