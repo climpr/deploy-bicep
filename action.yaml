@@ -65,6 +65,8 @@ runs:
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
+          set -x
+
           #* Enable strict mode
           set -euo pipefail
 
@@ -111,6 +113,7 @@ runs:
 
                     #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
                     formatted_json=$(echo "$message" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                      echo -e "${color}${prefix}:\e[0m"
                       echo -e "${color}${json_line}\e[0m"
                     done)
 
