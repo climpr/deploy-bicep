@@ -192,7 +192,12 @@ runs:
             formatted_message=$deployment_output
           fi
           annotation_message=$(format_multiline_annotation "$formatted_message")
-          echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_message}"
+
+          if [[ $WHAT_IF == 'true' ]]; then
+            echo "::notice::Bicep what-if results:%0A${annotation_message}"
+          else
+            echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_message}"
+          fi
 
           #* Format markdown code block and output to deployment.md
           sed \
