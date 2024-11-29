@@ -85,23 +85,47 @@ runs:
           #* Cleanup function
           touch stderr.log
           print_stderr() {
-            #* Read the file line by line
-            while IFS= read -r line; do
-              if [[ $line == WARNING:* ]]; then
-                #* Extract the WARNING message and print it in yellow
-                echo -e "\e[33m${line#WARNING: }\e[0m"
-              elif [[ $line == INFO:* ]]; then
-                #* Print the INFO message in the default color
-                echo "${line#INFO: }"
-              elif [[ $line == ERROR:* ]]; then
-                #* Extract the JSON from the ERROR message
-                json=${line#ERROR: }
-                #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
-                formatted_json=$(echo "$json" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
-                  echo -e "\e[31m${json_line}\e[0m"
-                done)
-                annotation_json=$(format_multiline_annotation "$formatted_json")
-                echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
+            current_entry=""
+            while IFS= read -r line || [[ -n $line ]]; do
+              if [[ $line =~ ^[^:]+: ]]; then
+                #* New entry starts; process the previous entry
+                if [[ -n $current_entry ]]; then
+                  #* Extract prefix and message
+                  local prefix="${current_entry%%:*}"  #* Text before the first colon
+                  local message="${current_entry#*: }" #* Text after the first colon and space
+
+                  #* Choose color based on prefix
+                  local color=""
+                  case "$prefix" in
+                  WARNING) color="\e[33m" ;; #* Yellow
+                  ERROR) color="\e[31m" ;;   #* Red
+                  *) color="\e[37m" ;;       #* Default (white/gray)
+                  esac
+
+                  #* Check if message is JSON
+                  if echo "$message" | jq -e . >/dev/null 2>&1; then
+
+                    #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                    formatted_json=$(echo "$message" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                      echo -e "${color}${json_line}\e[0m"
+                    done)
+
+                    #* Print GitHub annotation
+                    if [[ $prefix == "ERROR" ]]; then
+                      annotation_json=$(format_multiline_annotation "$formatted_json")
+                      echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
+                    fi
+
+                  else
+                    #* Not JSON: Print the raw message with color
+                    echo -e "${color}${message}\e[0m"
+                  fi
+                fi
+                #* Start a new log entry
+                current_entry="$line"
+              else
+                #* Continuation of the current entry
+                current_entry+=" $line"
               fi
             done <stderr.log
           }
