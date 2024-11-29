@@ -65,8 +65,6 @@ runs:
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
-          set -x
-
           #* Enable strict mode
           set -euo pipefail
 
@@ -182,15 +180,19 @@ runs:
           )"
 
           #* Run deployment command
-          deploymentOutput=$(${cmd[@]} 2> >(tee stderr.log >&2) | tee stdout.log)
+          deployment_output=$(${cmd[@]} 2> >(tee stderr.log >&2) | tee stdout.log)
 
           #* Write the result to console
-          echo "$deploymentOutput"
+          echo "$deployment_output"
 
           #* Write success annotation
-          formatted_json=$(echo "$deploymentOutput" | jq . 2>/dev/null)
-          annotation_json=$(format_multiline_annotation "$formatted_json")
-          echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_json}"
+          if echo "$deployment_output" | jq -e . >/dev/null 2>&1; then
+            formatted_message=$(echo "$deployment_output" | jq . 2>/dev/null)
+          else
+            formatted_message=$deployment_output
+          fi
+          annotation_message=$(format_multiline_annotation "$formatted_message")
+          echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_message}"
 
           #* Format markdown code block and output to deployment.md
           sed \
@@ -201,7 +203,7 @@ runs:
             stdout.log >deployment.md
 
           #* Write as github output
-          echo "deploymentOutput=$(echo $deploymentOutput)" >>"$GITHUB_OUTPUT"
+          echo "deployment-output=$(echo $deployment_output)" >>"$GITHUB_OUTPUT"
 
     - name: Add info to the deployment file
       id: deployment-info
@@ -239,4 +241,4 @@ runs:
 outputs:
   deployment-output:
     description: JSON formatted output from the deployment command.
-    value: ${{ steps.bicep-deployment.outputs.deploymentOutput }}
+    value: ${{ steps.bicep-deployment.outputs.deployment-output }}
