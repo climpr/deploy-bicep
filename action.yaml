@@ -207,8 +207,8 @@ runs:
           esac
 
           #* Add common parameters
-          cmd+=("--parameters $PARAMETER_FILE")
           cmd+=("--name $DEPLOYMENT_NAME")
+          cmd+=("--parameters $PARAMETER_FILE")
 
           #* Add stack specific parameters
           if [[ $TYPE == 'Stack' ]]; then
@@ -220,35 +220,19 @@ runs:
             if [[ $SCOPE == 'ManagementGroup' && -n "$DEPLOYMENT_SUBSCRIPTION" && "$DEPLOYMENT_SUBSCRIPTION" != " " ]]; then
               cmd+=("--deployment-resource-group $DEPLOYMENT_SUBSCRIPTION")
             fi
-            if [[ -n "$BYPASS_STACK_OUT_OF_SYNC_ERROR" && "$BYPASS_STACK_OUT_OF_SYNC_ERROR" != " " ]]; then
-              cmd+=("--bypass-stack-out-of-sync-error $BYPASS_STACK_OUT_OF_SYNC_ERROR")
-            fi
-            if [[ -n "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" && "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" == 'true' ]]; then
-              cmd+=("--deny-settings-apply-to-child-scopes")
-            fi
-            if [[ -n "$DENY_SETTINGS_EXCLUDED_ACTIONS" && "$DENY_SETTINGS_EXCLUDED_ACTIONS" != " " ]]; then
-              cmd+=("--deny-settings-excluded-actions $DENY_SETTINGS_EXCLUDED_ACTIONS")
-            fi
-            if [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" != " " ]]; then
-              cmd+=("--deny-settings-excluded-principals $DENY_SETTINGS_EXCLUDED_PRINCIPALS")
-            fi
-            if [[ -n "$DESCRIPTION" && "$DESCRIPTION" != " " ]]; then
-              cmd+=("--description $DESCRIPTION")
-            fi
-            if [[ -n "$TAGS" && "$TAGS" != " " ]]; then
-              cmd+=("--tags $TAGS")
-            fi
+            cmd+=("--bypass-stack-out-of-sync-error ${BYPASS_STACK_OUT_OF_SYNC_ERROR:=\"\"}")
+            [[ "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" == 'true'  ]] && cmd+=("--deny-settings-apply-to-child-scopes")
+            cmd+=("--deny-settings-excluded-actions ${DENY_SETTINGS_EXCLUDED_ACTIONS:=\"\"}")
+            cmd+=("--deny-settings-excluded-principals ${DENY_SETTINGS_EXCLUDED_PRINCIPALS:=\"\"}")
+            cmd+=("--description ${DESCRIPTION:=\"\"}")
+            cmd+=("--tags ${TAGS:=\"\"}")
             cmd+=("--yes")
           fi
 
           #* Add output and flow parameters
           cmd+=("--verbose")
-          if [[ -n "$WHAT_IF" && "$WHAT_IF" == 'true' ]]; then
-            cmd+=("--what-if")
-          fi
-          if [[ -n "$DEBUG" && "$DEBUG" == 'true' ]]; then
-            cmd+=("--debug")
-          fi
+          [[ "$WHAT_IF" == 'true'  ]] && cmd+=("--what-if")
+          [[ "$DEBUG" == 'true'  ]] && cmd+=("--debug")
 
           #* Print command
           echo "Running command:"
