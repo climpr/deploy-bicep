@@ -87,17 +87,17 @@ elseif ($deploymentType -eq "stack") {
         ManagementGroupId                         = $deploymentConfig.managementGroupId
         ResourceGroupName                         = $deploymentConfig.resourceGroupName
         ActionOnUnmanage                          = $deploymentConfig.actionOnUnmanage
-        BypassStackOutOfSyncError                 = $deploymentConfig.bypassStackOutOfSyncError ?? $false
+        BypassStackOutOfSyncError                 = $deploymentConfig.bypassStackOutOfSyncError
         DenySettingsMode                          = $deploymentConfig.denySettingsMode
-        DenySettingsApplyToChildScopes            = $deploymentConfig.denySettingsApplyToChildScopes ?? $false
+        DenySettingsApplyToChildScopes            = $deploymentConfig.denySettingsApplyToChildScopes
         DenySettingsExcludedActions               = $deploymentConfig.denySettingsExcludedActions
         DenySettingsExcludedPrincipals            = $deploymentConfig.denySettingsExcludedPrincipals
         DeploymentResourceGroup                   = $deploymentConfig.deploymentResourceGroup
         DeploymentSubscription                    = $deploymentConfig.deploymentSubscription
         Description                               = $deploymentConfig.description
         Tags                                      = $deploymentConfig.tags
-        DenySettingsExcludedActionsAzCliString    = "'$($deploymentConfig.denySettingsExcludedActions -join " ")'"
-        DenySettingsExcludedPrincipalsAzCliString = "'$($deploymentConfig.denySettingsExcludedPrincipals -join " ")'"
+        DenySettingsExcludedActionsAzCliString    = $null -eq $deploymentConfig.denySettingsExcludedActions ? "" : "'$($deploymentConfig.denySettingsExcludedActions -join " ")'"
+        DenySettingsExcludedPrincipalsAzCliString = $null -eq $deploymentConfig.denySettingsExcludedPrincipals ? "" :  "'$($deploymentConfig.denySettingsExcludedPrincipals -join " ")'"
         TagsAzCliString                           = ($deploymentConfig.tags.Keys | Where-Object { $_ } | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join ' '
     }
 }
