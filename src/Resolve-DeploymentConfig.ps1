@@ -87,9 +87,9 @@ elseif ($deploymentType -eq "stack") {
         ManagementGroupId                         = $deploymentConfig.managementGroupId
         ResourceGroupName                         = $deploymentConfig.resourceGroupName
         ActionOnUnmanage                          = $deploymentConfig.actionOnUnmanage
-        BypassStackOutOfSyncError                 = $deploymentConfig.bypassStackOutOfSyncError
+        BypassStackOutOfSyncError                 = $deploymentConfig.bypassStackOutOfSyncError ?? $false
         DenySettingsMode                          = $deploymentConfig.denySettingsMode
-        DenySettingsApplyToChildScopes            = $deploymentConfig.denySettingsApplyToChildScopes
+        DenySettingsApplyToChildScopes            = $deploymentConfig.denySettingsApplyToChildScopes ?? $false
         DenySettingsExcludedActions               = $deploymentConfig.denySettingsExcludedActions
         DenySettingsExcludedPrincipals            = $deploymentConfig.denySettingsExcludedPrincipals
         DeploymentResourceGroup                   = $deploymentConfig.deploymentResourceGroup
