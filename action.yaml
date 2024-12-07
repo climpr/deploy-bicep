@@ -41,157 +41,252 @@ runs:
 
         #* Write outputs
         $outputs = @{
-          Type                                      = "type"
-          DeploymentScope                           = "scope"
-          Deploy                                    = "deploy"
-          AzureCliVersion                           = "azure-cli-version"
-          ParameterFile                             = "parameter-file"
-          DeploymentName                            = "name"
-          Location                                  = "location"
-          ManagementGroupId                         = "management-group-id"
-          ResourceGroupName                         = "resource-group"
-          ActionOnUnmanage                          = "action-on-unmanage"
-          BypassStackOutOfSyncError                 = "bypass-stack-out-of-sync-error"
-          DenySettingsMode                          = "deny-settings-mode"
-          DenySettingsApplyToChildScopes            = "deny-settings-apply-to-child-scopes"
-          DenySettingsExcludedActionsAzCliString    = "deny-settings-excluded-actions"
-          DenySettingsExcludedPrincipalsAzCliString = "deny-settings-excluded-principals"
-          DeploymentResourceGroup                   = "deployment-resource-group"
-          DeploymentSubscription                    = "deployment-subscription"
-          Description                               = "description"
-          TagsAzCliString                           = "tags"
+          "type"                                = "Type"
+          "scope"                               = "DeploymentScope"
+          "deploy"                              = "Deploy"
+          "azure-cli-version"                   = "AzureCliVersion"
+          "parameter-file"                      = "ParameterFile"
+          "name"                                = "DeploymentName"
+          "location"                            = "Location"
+          "management-group-id"                 = "ManagementGroupId"
+          "resource-group"                      = "ResourceGroupName"
+          "action-on-unmanage"                  = "ActionOnUnmanage"
+          "deny-settings-mode"                  = "DenySettingsMode"
+          "deployment-resource-group"           = "DeploymentResourceGroup"
+          "deployment-subscription"             = "DeploymentSubscription"
+          "bypass-stack-out-of-sync-error"      = "BypassStackOutOfSyncError"
+          "deny-settings-apply-to-child-scopes" = "DenySettingsApplyToChildScopes"
+          "deny-settings-excluded-actions"      = "DenySettingsExcludedActionsAzCliString"
+          "deny-settings-excluded-principals"   = "DenySettingsExcludedPrincipalsAzCliString"
+          "description"                         = "Description"
+          "tags"                                = "TagsAzCliString"
         }
 
         foreach ($output in $outputs.Keys) {
-          Write-Output "$($outputs[$output])=$($deploymentConfig.$output)" >> $env:GITHUB_OUTPUT
+          Write-Output "$($output)=$($deploymentConfig.($outputs[$output]))" >> $env:GITHUB_OUTPUT
         }
 
     - name: Bicep deployment
       id: bicep-deployment
       uses: azure/CLI@v2
-      if: steps.resolve-deploymentconfig.outputs.type == 'Deployment' && steps.resolve-deploymentconfig.outputs.deploy == 'true'
+      if: steps.resolve-deploymentconfig.outputs.deploy == 'true'
+      env:
+        SCOPE: ${{ steps.resolve-deploymentconfig.outputs.scope }}
+        PARAMETER_FILE: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
+        DEPLOYMENT_NAME: ${{ steps.resolve-deploymentconfig.outputs.name }}
+        RESOURCE_GROUP: ${{ steps.resolve-deploymentconfig.outputs.resource-group }}
+        MANAGEMENT_GROUP_ID: ${{ steps.resolve-deploymentconfig.outputs.management-group-id }}
+        LOCATION: ${{ steps.resolve-deploymentconfig.outputs.location }}
+        ACTION_ON_UNMANAGE: ${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}
+        DENY_SETTINGS_MODE: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}
+        DEPLOYMENT_RESOURCE_GROUP: ${{ steps.resolve-deploymentconfig.outputs.deployment-resource-group }}
+        DEPLOYMENT_SUBSCRIPTION: ${{ steps.resolve-deploymentconfig.outputs.deployment-subscription }}
+        BYPASS_STACK_OUT_OF_SYNC_ERROR: ${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}
+        DENY_SETTINGS_APPLY_TO_CHILD_SCOPES: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes }}
+        DENY_SETTINGS_EXCLUDED_ACTIONS: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }}
+        DENY_SETTINGS_EXCLUDED_PRINCIPALS: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }}
+        DESCRIPTION: ${{ steps.resolve-deploymentconfig.outputs.description }}
+        TAGS: ${{ steps.resolve-deploymentconfig.outputs.tags }}
+        WHAT_IF: ${{ inputs.what-if }}
+        DEBUG: ${{ runner.debug == '1' }}
       with:
         azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
         inlineScript: |
+          #* Enable strict mode
           set -euo pipefail
-          if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
-              deploymentOutput=$(az deployment group create \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
-                --verbose \
-                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
-              deploymentOutput=$(az deployment sub create \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
-                --verbose \
-                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "managementGroup" ]; then
-              deploymentOutput=$(az deployment mg create \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --management-group-id '${{ steps.resolve-deploymentconfig.outputs.management-group-id }}' \
-                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
-                --verbose \
-                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "tenant" ]; then
-              deploymentOutput=$(az deployment tenant create \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --location '${{ steps.resolve-deploymentconfig.outputs.location }}' \
-                --verbose \
-                ${{ (inputs.what-if == 'true') && '--what-if' || '' }} \
-                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
-          fi
 
-          sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
+          #* Multiline annotation replacement function
+          format_multiline_annotation() {
+            #* Input: A multiline string
+            #* Output: The string formatted for GitHub annotations
 
-          if grep -q "ERROR:" stderr.txt; then
-              echo "::error::An error occurred during deployment. See error details in below"
-              cat stderr.txt
+            local input="$1"
+
+            #* Replace newlines with %0A to support multiline annotations in GitHub workflows
+            local formatted_string=$(echo "$input" | sed ':a;N;$!ba;s/\n/%0A/g')
+
+            #* Output the formatted string
+            echo "$formatted_string"
+          }
+
+          #* Cleanup function
+          touch stderr.log
+          print_stderr() {
+            echo "start"
+            cat stderr.log
+            echo "stop"
+
+            current_entry=""
+            while IFS= read -r line || [[ -n $line ]]; do
+              if [[ $line =~ ^[^:]+: ]]; then
+                #* New entry starts; process the previous entry
+                if [[ -n $current_entry ]]; then
+                  #* Extract prefix and message
+                  local prefix="${current_entry%%:*}"  #* Text before the first colon
+                  local message="${current_entry#*: }" #* Text after the first colon and space
+
+                  #* Choose color based on prefix
+                  local color=""
+                  case "$prefix" in
+                  WARNING) color="\e[33m" ;; #* Yellow
+                  ERROR) color="\e[31m" ;;   #* Red
+                  *) color="\e[37m" ;;       #* Default (white/gray)
+                  esac
+
+                  #* Check if message is JSON
+                  if echo "$message" | jq -e . >/dev/null 2>&1; then
+                    #* Pretty-print the JSON and apply red color to each line, suppressing extra lines
+                    formatted_json=$(echo "$message" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
+                      echo -e "${color}${json_line}\e[0m"
+                    done)
+
+
+                    #* Print GitHub annotation
+                    if [[ $prefix == "ERROR" ]]; then
+                      annotation_json=$(format_multiline_annotation "$formatted_json")
+                      echo "::error::An error occurred during deployment. See error details in below%0A${annotation_json}"
+                    fi
+
+                  else
+                    #* Not JSON: Print the raw message with color
+                    echo -e "${color}${prefix}: ${message}\e[0m"
+                  fi
+                fi
+                #* Start a new log entry
+                current_entry="$line"
+              else
+                #* Continuation of the current entry
+                current_entry+=" $line"
+              fi
+            done <stderr.log
+          }
+
+          #* Set trap to call the cleanup function on ERR
+          trap print_stderr ERR
+
+          #* Create deployment command
+          cmd=()
+
+          #* Determine deployment type
+          case $TYPE in
+            "Deployment")
+              type_cmd="deployment"
+              ;;
+            "Stack")
+              type_cmd="stack"
+              ;;
+            *)
+              echo "::error::Unknown deployment type." >&2
               exit 1
-          fi
+          esac
 
-          echo "$deploymentOutput"
-
-          echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
-
-    - name: Deployment Stack
-      id: deployment-stack
-      uses: azure/CLI@v2
-      if: steps.resolve-deploymentconfig.outputs.type == 'Stack' && steps.resolve-deploymentconfig.outputs.deploy == 'true' && inputs.what-if != 'true'
-      with:
-        azcliversion: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-version }}
-        inlineScript: |
-          set -euo pipefail
-          if [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "resourceGroup" ]; then
-              deploymentOutput=$(az stack group create \
-                --action-on-unmanage '${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}' \
-                --deny-settings-mode '${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
-                --bypass-stack-out-of-sync-error '${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}' \
-                ${{ (steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes == 'true') && '--deny-settings-apply-to-child-scopes' || '' }} \
-                --deny-settings-excluded-actions ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }} \
-                --deny-settings-excluded-principals ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }} \
-                --description '${{ steps.resolve-deploymentconfig.outputs.description }}' \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --tags ${{ steps.resolve-deploymentconfig.outputs.tags }} \
-                --yes \
-                --verbose \
-                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "subscription" ]; then
-              deploymentOutput=$(az stack sub create \
-                --action-on-unmanage '${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}' \
-                --deny-settings-mode '${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
-                --bypass-stack-out-of-sync-error '${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}' \
-                ${{ (steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes == 'true') && '--deny-settings-apply-to-child-scopes' || '' }} \
-                --deny-settings-excluded-actions ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }} \
-                --deny-settings-excluded-principals ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }} \
-                --deployment-resource-group ${{ steps.resolve-deploymentconfig.outputs.deployment-resource-group }} \
-                --description '${{ steps.resolve-deploymentconfig.outputs.description }}' \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --tags ${{ steps.resolve-deploymentconfig.outputs.tags }} \
-                --yes \
-                --verbose \
-                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
-          elif [ "${{ steps.resolve-deploymentconfig.outputs.scope }}" = "managementGroup" ]; then
-              deploymentOutput=$(az stack mg create \
-                --action-on-unmanage '${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}' \
-                --deny-settings-mode '${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}' \
-                --name '${{ steps.resolve-deploymentconfig.outputs.name }}' \
-                --resource-group '${{ steps.resolve-deploymentconfig.outputs.resource-group }}' \
-                --bypass-stack-out-of-sync-error '${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}' \
-                ${{ (steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes == 'true') && '--deny-settings-apply-to-child-scopes' || '' }} \
-                --deny-settings-excluded-actions ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }} \
-                --deny-settings-excluded-principals ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }} \
-                --deployment-subscription ${{ steps.resolve-deploymentconfig.outputs.deployment-subscription }} \
-                --description '${{ steps.resolve-deploymentconfig.outputs.description }}' \
-                --parameters '${{ steps.resolve-deploymentconfig.outputs.parameter-file }}' \
-                --tags ${{ steps.resolve-deploymentconfig.outputs.tags }} \
-                --yes \
-                --verbose \
-                ${{ (runner.debug == '1') && '--debug' || '' }} 2>stderr.txt | tee deployment.md)
-          fi
-
-          sed -i -e '1s/^/```diff\n/' -e '$a```' -e 's/~/!/g' -e 's/^[ \t]*//' deployment.md
-
-          if grep -q "ERROR:" stderr.txt; then
-              echo "::error::An error occurred during deployment. See error details in below"
-              cat stderr.txt
+          #* Determine deployment scope
+          case $SCOPE in
+            "resourceGroup")
+              cmd+=("az $type_cmd group create")
+              cmd+=("--resource-group $RESOURCE_GROUP")
+              ;;
+            "subscription")
+              cmd+=("az $type_cmd sub create")
+              cmd+=("--location $LOCATION")
+              ;;
+            "managementGroup")
+              cmd+=("az $type_cmd mg create")
+              cmd+=("--location $LOCATION")
+              cmd+=("--management-group-id $MANAGEMENT_GROUP_ID")
+              ;;
+            "tenant")
+              cmd+=("az $type_cmd tenant create")
+              cmd+=("--location $LOCATION")
+              ;;
+            *)
+              echo "::error::Unknown deployment scope." >&2
               exit 1
+              ;;
+          esac
+
+          #* Add common parameters
+          cmd+=("--parameters $PARAMETER_FILE")
+          cmd+=("--name $DEPLOYMENT_NAME")
+
+          #* Add stack specific parameters
+          if [[ $TYPE == 'Stack' ]]; then
+            cmd+=("--action-on-unmanage $ACTION_ON_UNMANAGE")
+            cmd+=("--deny-settings-mode $DENY_SETTINGS_MODE")
+            if [[ $SCOPE == 'Subscription' && -n "$DEPLOYMENT_RESOURCE_GROUP" && "$DEPLOYMENT_RESOURCE_GROUP" != " " ]]; then
+              cmd+=("--deployment-resource-group $DEPLOYMENT_RESOURCE_GROUP")
+            fi
+            if [[ $SCOPE == 'ManagementGroup' && -n "$DEPLOYMENT_SUBSCRIPTION" && "$DEPLOYMENT_SUBSCRIPTION" != " " ]]; then
+              cmd+=("--deployment-resource-group $DEPLOYMENT_SUBSCRIPTION")
+            fi
+            if [[ -n "$BYPASS_STACK_OUT_OF_SYNC_ERROR" && "$BYPASS_STACK_OUT_OF_SYNC_ERROR" != " " ]]; then
+              cmd+=("--bypass-stack-out-of-sync-error $BYPASS_STACK_OUT_OF_SYNC_ERROR")
+            fi
+            if [[ -n "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" == 'true' ]]; then
+              cmd+=("--deny-settings-apply-to-child-scopes")
+            fi
+            if [[ -n "$DENY_SETTINGS_EXCLUDED_ACTIONS" && "$DENY_SETTINGS_EXCLUDED_ACTIONS" != " " ]]; then
+              cmd+=("--deny-settings-excluded-actions $DENY_SETTINGS_EXCLUDED_ACTIONS")
+            fi
+            if [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" != " " ]]; then
+              cmd+=("--deny-settings-excluded-principals $DENY_SETTINGS_EXCLUDED_PRINCIPALS")
+            fi
+            if [[ -n "$description" && "$description" != " " ]]; then
+              cmd+=("--description $description")
+            fi
+            if [[ -n "$TAGS" && "$TAGS" != " " ]]; then
+              cmd+=("--tags $TAGS")
+            fi
+            cmd+=("--yes")
           fi
 
-          echo "$deploymentOutput"
+          #* Add output and flow parameters
+          cmd+=("--verbose")
+          if [[ -n "$WHAT_IF" == 'true' ]]; then
+            cmd+=("--what-if")
+          fi
+          if [[ -n "$DEBUG" == 'true' ]]; then
+            cmd+=("--debug")
+          fi
 
-          echo "deploymentOutput=$(echo $deploymentOutput)" >> "$GITHUB_OUTPUT"
+          #* Print command
+          echo "Running command:"
+          printf "%s\n" "$(
+            printf "%s \\\\\n" "${cmd[@]}" |              #* Print each array element followed by " \\"
+              awk 'NR==1 {print; next} {print "  " $0}' | #* Add two spaces before all lines except the first
+              sed '$ s/ \\$//'                            #* Remove the trailing slash from the last line
+          )"
+
+          #* Run deployment command
+          deployment_output=$(${cmd[@]} 2> >(tee stderr.log >&2) | tee stdout.log)
+
+          #* Write the result to console
+          echo "$deployment_output"
+
+          #* Write success annotation
+          if echo "$deployment_output" | jq -e . >/dev/null 2>&1; then
+            formatted_message=$(echo "$deployment_output" | jq . 2>/dev/null)
+          else
+            formatted_message=$deployment_output
+          fi
+          annotation_message=$(format_multiline_annotation "$formatted_message")
+
+          if [[ $WHAT_IF == 'true' ]]; then
+            echo "::notice::Bicep what-if results:%0A${annotation_message}"
+          else
+            echo "::notice::Bicep template successfully deployed. Result:%0A${annotation_message}"
+          fi
+
+          #* Format markdown code block and output to deployment.md
+          sed \
+            -e '1s/^/```diff\n/' \
+            -e '$a```' \
+            -e 's/~/!/g' \
+            -e 's/^[ \t]*//' \
+            stdout.log >deployment.md
+
+          #* Write as github output
+          echo "deployment-output=$(echo $deployment_output)" >>"$GITHUB_OUTPUT"
 
     - name: Add info to the deployment file
       id: deployment-info
@@ -216,13 +311,17 @@ runs:
       uses: mshick/add-pr-comment@v2
       with:
         message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
-        message-path: |
-          deployment.md
+        message-path: deployment.md
+
+    - name: Clean created files
+      shell: bash
+      run: |
+        rm -f deployment.md
+        rm -f commitMessageAndId.md
+        rm -f stdout.log
+        rm -f stderr.log
 
 outputs:
   deployment-output:
     description: JSON formatted output from the deployment command.
-    value: ${{ steps.bicep-deployment.outputs.deploymentOutput }}
-  stack-output:
-    description: JSON formatted output from the deployment command.
-    value: ${{ steps.deployment-stack.outputs.deploymentOutput }}
+    value: ${{ steps.bicep-deployment.outputs.deployment-output }}
