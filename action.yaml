@@ -220,17 +220,17 @@ runs:
             if [[ $SCOPE == 'ManagementGroup' && -n "$DEPLOYMENT_SUBSCRIPTION" && "$DEPLOYMENT_SUBSCRIPTION" != " " ]]; then
               cmd+=("--deployment-resource-group $DEPLOYMENT_SUBSCRIPTION")
             fi
-            [[ "$BYPASS_STACK_OUT_OF_SYNC_ERROR" == 'true' ]]; then
+            if [[ "$BYPASS_STACK_OUT_OF_SYNC_ERROR" == 'true' ]]; then
               cmd+=("--bypass-stack-out-of-sync-error")
             fi
-            [[ "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" == 'true' ]]; then
+            if [[ "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" == 'true' ]]; then
               cmd+=("--deny-settings-apply-to-child-scopes")
             fi
-            [[ -n "$DENY_SETTINGS_EXCLUDED_ACTIONS" && "$DENY_SETTINGS_EXCLUDED_ACTIONS" != " " ]]; then
-              cmd+=("--deny-settings-excluded-actions ${DENY_SETTINGS_EXCLUDED_ACTIONS:=\"\"}")
+            if [[ -n "$DENY_SETTINGS_EXCLUDED_ACTIONS" && "$DENY_SETTINGS_EXCLUDED_ACTIONS" != " " ]]; then
+              cmd+=("--deny-settings-excluded-actions $DENY_SETTINGS_EXCLUDED_ACTIONS")
             fi
-            [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" != " " ]]; then
-              cmd+=("--deny-settings-excluded-principals ${DENY_SETTINGS_EXCLUDED_PRINCIPALS:=\"\"}")
+            if [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" != " " ]]; then
+              cmd+=("--deny-settings-excluded-principals $DENY_SETTINGS_EXCLUDED_PRINCIPALS")
             fi
             cmd+=("--description ${DESCRIPTION:=\"\"}")
             cmd+=("--tags ${TAGS:=\"\"}")
