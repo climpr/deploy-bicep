@@ -96,8 +96,8 @@ elseif ($deploymentType -eq "stack") {
         DeploymentSubscription                    = $deploymentConfig.deploymentSubscription
         Description                               = $deploymentConfig.description
         Tags                                      = $deploymentConfig.tags
-        DenySettingsExcludedActionsAzCliString    = $null -eq $deploymentConfig.denySettingsExcludedActions ? "" : "'$($deploymentConfig.denySettingsExcludedActions -join " ")'"
-        DenySettingsExcludedPrincipalsAzCliString = $null -eq $deploymentConfig.denySettingsExcludedPrincipals ? "" :  "'$($deploymentConfig.denySettingsExcludedPrincipals -join " ")'"
+        DenySettingsExcludedActionsAzCliString    = $null -eq $deploymentConfig.denySettingsExcludedActions ? $null : "'$($deploymentConfig.denySettingsExcludedActions -join " ")'"
+        DenySettingsExcludedPrincipalsAzCliString = $null -eq $deploymentConfig.denySettingsExcludedPrincipals ? $null :  "'$($deploymentConfig.denySettingsExcludedPrincipals -join " ")'"
         TagsAzCliString                           = ($deploymentConfig.tags.Keys | Where-Object { $_ } | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join ' '
     }
 }
