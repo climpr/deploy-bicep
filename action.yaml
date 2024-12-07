@@ -71,6 +71,7 @@ runs:
       uses: azure/CLI@v2
       if: steps.resolve-deploymentconfig.outputs.deploy == 'true'
       env:
+        TYPE: ${{ steps.resolve-deploymentconfig.outputs.type }}
         SCOPE: ${{ steps.resolve-deploymentconfig.outputs.scope }}
         PARAMETER_FILE: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
         DEPLOYMENT_NAME: ${{ steps.resolve-deploymentconfig.outputs.name }}
@@ -128,9 +129,9 @@ runs:
                   #* Choose color based on prefix
                   local color=""
                   case "$prefix" in
-                  WARNING) color="\e[33m" ;; #* Yellow
-                  ERROR) color="\e[31m" ;;   #* Red
-                  *) color="\e[37m" ;;       #* Default (white/gray)
+                    WARNING) color="\e[33m" ;; #* Yellow
+                    ERROR) color="\e[31m" ;;   #* Red
+                    *) color="\e[37m" ;;       #* Default (white/gray)
                   esac
 
                   #* Check if message is JSON
@@ -139,7 +140,6 @@ runs:
                     formatted_json=$(echo "$message" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
                       echo -e "${color}${json_line}\e[0m"
                     done)
-
 
                     #* Print GitHub annotation
                     if [[ $prefix == "ERROR" ]]; then
@@ -178,6 +178,7 @@ runs:
             *)
               echo "::error::Unknown deployment type." >&2
               exit 1
+              ;;
           esac
 
           #* Determine deployment scope
@@ -231,8 +232,8 @@ runs:
             if [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" != " " ]]; then
               cmd+=("--deny-settings-excluded-principals $DENY_SETTINGS_EXCLUDED_PRINCIPALS")
             fi
-            if [[ -n "$description" && "$description" != " " ]]; then
-              cmd+=("--description $description")
+            if [[ -n "$DESCRIPTION" && "$DESCRIPTION" != " " ]]; then
+              cmd+=("--description $DESCRIPTION")
             fi
             if [[ -n "$TAGS" && "$TAGS" != " " ]]; then
               cmd+=("--tags $TAGS")
