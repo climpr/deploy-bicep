@@ -14,9 +14,9 @@ param (
     [string]
     $GitHubEventName, 
     
-    [Parameter(Mandatory)]
+    [Parameter(Mandatory=$false)]
     [bool]
-    $DeploymentWhatIf, 
+    $DeploymentWhatIf = $false, 
 
     [switch]
     $Quiet

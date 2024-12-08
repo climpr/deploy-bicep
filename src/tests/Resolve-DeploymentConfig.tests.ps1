@@ -48,8 +48,8 @@ Describe "Resolve-DeploymentConfig.ps1" {
             $res.TemplateReference | Should -Be 'targetScopeLine2.bicep'
         }
 
-        It "Should have DeploymentScope like [subscription]" {
-            $res.DeploymentScope | Should -Be 'subscription'
+        It "Should have Scope like [subscription]" {
+            $res.Scope | Should -Be 'subscription'
         }
     }
 
@@ -74,8 +74,8 @@ Describe "Resolve-DeploymentConfig.ps1" {
             $res.TemplateReference | Should -Be 'usingLine2.bicep'
         }
 
-        It "Should have DeploymentScope like [managementGroup]" {
-            $res.DeploymentScope | Should -Be 'managementGroup'
+        It "Should have Scope like [managementGroup]" {
+            $res.Scope | Should -Be 'managementGroup'
         }
 
         It "Should have same ManagementGroupId as mock [mockMgmtGroupId]" {
@@ -107,8 +107,8 @@ Describe "Resolve-DeploymentConfig.ps1" {
             $res.TemplateReference | Should -Be 'usingCommented.bicep'
         }
 
-        It "Should have DeploymentScope like [resourceGroup]" {
-            $res.DeploymentScope | Should -Be 'resourceGroup'
+        It "Should have Scope like [resourceGroup]" {
+            $res.Scope | Should -Be 'resourceGroup'
         }
     }
 
@@ -133,8 +133,8 @@ Describe "Resolve-DeploymentConfig.ps1" {
             $res.TemplateReference | Should -Be 'targetScopeCommented.bicep'
         }
 
-        It "Should have DeploymentScope like [subscription]" {
-            $res.DeploymentScope | Should -Be 'subscription'
+        It "Should have Scope like [subscription]" {
+            $res.Scope | Should -Be 'subscription'
         }
     }
 
