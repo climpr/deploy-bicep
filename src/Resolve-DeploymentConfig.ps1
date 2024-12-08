@@ -114,7 +114,7 @@ elseif ($deploymentObject.Type -eq "stack") {
     $azCliCommand += "--yes"
     $azCliCommand += "--action-on-unmanage $($deploymentConfig.actionOnUnmanage)"
     $azCliCommand += "--deny-settings-mode $($deploymentConfig.denySettingsMode)"
-    $azCliCommand += "--description $($deploymentConfig.description ?? '""')"
+    $azCliCommand += "--description $($deploymentConfig.description ?? '""""')"
     if ($deploymentObject.Scope -eq "subscription" -and $deploymentConfig.deploymentResourceGroup) {
         $azCliCommand += "--deployment-resource-group $($deploymentConfig.deploymentResourceGroup)"
     }
@@ -137,7 +137,7 @@ elseif ($deploymentObject.Type -eq "stack") {
     }
     if ($null -ne $deploymentConfig.tags) {
         $azCliTags = ($deploymentConfig.tags.Keys | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join " "
-        $azCliCommand += "--tags $($azCliTags ?? '""')"
+        $azCliCommand += "--tags $($azCliTags ?? '""""')"
     }
     else {
         $azCliCommand += '--tags ""'
