@@ -41,25 +41,25 @@ runs:
 
         #* Write outputs
         $outputs = @{
-          "type"                                = "Type"
-          "scope"                               = "DeploymentScope"
-          "deploy"                              = "Deploy"
-          "azure-cli-version"                   = "AzureCliVersion"
-          "parameter-file"                      = "ParameterFile"
-          "name"                                = "DeploymentName"
-          "location"                            = "Location"
-          "management-group-id"                 = "ManagementGroupId"
-          "resource-group"                      = "ResourceGroupName"
-          "action-on-unmanage"                  = "ActionOnUnmanage"
-          "deny-settings-mode"                  = "DenySettingsMode"
-          "deployment-resource-group"           = "DeploymentResourceGroup"
-          "deployment-subscription"             = "DeploymentSubscription"
-          "bypass-stack-out-of-sync-error"      = "BypassStackOutOfSyncError"
-          "deny-settings-apply-to-child-scopes" = "DenySettingsApplyToChildScopes"
-          "deny-settings-excluded-actions"      = "DenySettingsExcludedActionsAzCliString"
-          "deny-settings-excluded-principals"   = "DenySettingsExcludedPrincipalsAzCliString"
-          "description"                         = "Description"
-          "tags"                                = "TagsAzCliString"
+          "type"                                   = "Type"
+          "scope"                                  = "DeploymentScope"
+          "deploy"                                 = "Deploy"
+          "azure-cli-version"                      = "AzureCliVersion"
+          "parameter-file"                         = "ParameterFile"
+          "name"                                   = "DeploymentName"
+          "location"                               = "Location"
+          "management-group-id"                    = "ManagementGroupId"
+          "resource-group"                         = "ResourceGroupName"
+          "action-on-unmanage"                     = "ActionOnUnmanage"
+          "deny-settings-mode"                     = "DenySettingsMode"
+          "deployment-resource-group"              = "DeploymentResourceGroup"
+          "deployment-subscription"                = "DeploymentSubscription"
+          "bypass-stack-out-of-sync-error"         = "BypassStackOutOfSyncError"
+          "deny-settings-apply-to-child-scopes"    = "DenySettingsApplyToChildScopes"
+          "deny-settings-excluded-actions-json"    = "DenySettingsExcludedActionsJson"
+          "deny-settings-excluded-principals-json" = "DenySettingsExcludedPrincipalsJson"
+          "description"                            = "Description"
+          "tags-json"                              = "TagsJson"
         }
 
         foreach ($output in $outputs.Keys) {
@@ -84,10 +84,10 @@ runs:
         DEPLOYMENT_SUBSCRIPTION: ${{ steps.resolve-deploymentconfig.outputs.deployment-subscription }}
         BYPASS_STACK_OUT_OF_SYNC_ERROR: ${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}
         DENY_SETTINGS_APPLY_TO_CHILD_SCOPES: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes }}
-        DENY_SETTINGS_EXCLUDED_ACTIONS: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions }}
-        DENY_SETTINGS_EXCLUDED_PRINCIPALS: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals }}
+        DENY_SETTINGS_EXCLUDED_ACTIONS_JSON: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions-json }}
+        DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals-json }}
         DESCRIPTION: ${{ steps.resolve-deploymentconfig.outputs.description }}
-        TAGS: ${{ steps.resolve-deploymentconfig.outputs.tags }}
+        TAGS_JSON: ${{ steps.resolve-deploymentconfig.outputs.tags-json }}
         WHAT_IF: ${{ inputs.what-if }}
         DEBUG: ${{ runner.debug == '1' }}
       with:
@@ -226,14 +226,19 @@ runs:
             if [[ "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" == 'true' ]]; then
               cmd+=("--deny-settings-apply-to-child-scopes")
             fi
-            if [[ -n "$DENY_SETTINGS_EXCLUDED_ACTIONS" && "$DENY_SETTINGS_EXCLUDED_ACTIONS" != " " ]]; then
-              cmd+=("--deny-settings-excluded-actions $DENY_SETTINGS_EXCLUDED_ACTIONS")
+            if [[ -n "$DENY_SETTINGS_EXCLUDED_ACTIONS_JSON" && "$DENY_SETTINGS_EXCLUDED_ACTIONS_JSON" != " " ]]; then
+              excluded_actions_azcli=$(echo "$DENY_SETTINGS_EXCLUDED_ACTIONS_JSON" | jq -r '.[]' | paste -sd " " -)
+              cmd+=("--deny-settings-excluded-actions $excluded_actions_azcli")
             fi
-            if [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS" != " " ]]; then
-              cmd+=("--deny-settings-excluded-principals $DENY_SETTINGS_EXCLUDED_PRINCIPALS")
+            if [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON" != " " ]]; then
+              excluded_principals_azcli=$(echo "$DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON" | jq -r '.[]' | paste -sd " " -)
+              cmd+=("--deny-settings-excluded-principals $excluded_principals_azcli")
+            fi
+            if [[ -n "$TAGS_JSON" && "$TAGS_JSON" != " " ]]; then
+              tags_azcli=$(echo "$TAGS_JSON" | jq -r '.tags | to_entries | map("\(.key)=\(.value)") | map("'"'"'\(.)'"'"'") | join(" ")')
+              cmd+=("--tags ${tags_azcli:=\"\"}")
             fi
             cmd+=("--description ${DESCRIPTION:=\"\"}")
-            cmd+=("--tags ${TAGS:=\"\"}")
             cmd+=("--yes")
           fi
 

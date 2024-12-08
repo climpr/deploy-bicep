@@ -75,30 +75,30 @@ if ($deploymentType -eq "deployment" -or !$deploymentType) {
 }
 elseif ($deploymentType -eq "stack") {
     $deploymentObject = [pscustomobject]@{
-        Type                                      = "Stack"
-        Deploy                                    = $true
-        ParameterFile                             = $parameterFileRelativePath
-        TemplateReference                         = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
-        DeploymentScope                           = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
-        AzureCliVersion                           = $deploymentConfig.azureCliVersion
-        DeploymentConfig                          = $deploymentConfig
-        DeploymentName                            = $deploymentConfig.name
-        Location                                  = $deploymentConfig.location
-        ManagementGroupId                         = $deploymentConfig.managementGroupId
-        ResourceGroupName                         = $deploymentConfig.resourceGroupName
-        ActionOnUnmanage                          = $deploymentConfig.actionOnUnmanage
-        BypassStackOutOfSyncError                 = $deploymentConfig.bypassStackOutOfSyncError ?? $false
-        DenySettingsMode                          = $deploymentConfig.denySettingsMode
-        DenySettingsApplyToChildScopes            = $deploymentConfig.denySettingsApplyToChildScopes ?? $false
-        DenySettingsExcludedActions               = $deploymentConfig.denySettingsExcludedActions
-        DenySettingsExcludedPrincipals            = $deploymentConfig.denySettingsExcludedPrincipals
-        DeploymentResourceGroup                   = $deploymentConfig.deploymentResourceGroup
-        DeploymentSubscription                    = $deploymentConfig.deploymentSubscription
-        Description                               = $deploymentConfig.description
-        Tags                                      = $deploymentConfig.tags
-        DenySettingsExcludedActionsAzCliString    = $null -eq $deploymentConfig.denySettingsExcludedActions ? $null : "'$($deploymentConfig.denySettingsExcludedActions -join " ")'"
-        DenySettingsExcludedPrincipalsAzCliString = $null -eq $deploymentConfig.denySettingsExcludedPrincipals ? $null :  "'$($deploymentConfig.denySettingsExcludedPrincipals -join " ")'"
-        TagsAzCliString                           = ($deploymentConfig.tags.Keys | Where-Object { $_ } | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join ' '
+        Type                               = "Stack"
+        Deploy                             = $true
+        ParameterFile                      = $parameterFileRelativePath
+        TemplateReference                  = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
+        DeploymentScope                    = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
+        AzureCliVersion                    = $deploymentConfig.azureCliVersion
+        DeploymentConfig                   = $deploymentConfig
+        DeploymentName                     = $deploymentConfig.name
+        Location                           = $deploymentConfig.location
+        ManagementGroupId                  = $deploymentConfig.managementGroupId ?? ""
+        ResourceGroupName                  = $deploymentConfig.resourceGroupName ?? ""
+        ActionOnUnmanage                   = $deploymentConfig.actionOnUnmanage
+        BypassStackOutOfSyncError          = $deploymentConfig.bypassStackOutOfSyncError ?? $false
+        DenySettingsMode                   = $deploymentConfig.denySettingsMode
+        DenySettingsApplyToChildScopes     = $deploymentConfig.denySettingsApplyToChildScopes ?? $false
+        DenySettingsExcludedActions        = $deploymentConfig.denySettingsExcludedActions
+        DenySettingsExcludedPrincipals     = $deploymentConfig.denySettingsExcludedPrincipals
+        DeploymentResourceGroup            = $deploymentConfig.deploymentResourceGroup
+        DeploymentSubscription             = $deploymentConfig.deploymentSubscription
+        Description                        = $deploymentConfig.description
+        Tags                               = $deploymentConfig.tags
+        DenySettingsExcludedActionsJson    = $null -eq $deploymentConfig.denySettingsExcludedActions ? "" : ($deploymentConfig.denySettingsExcludedActions | ConvertTo-Json -AsArray -Compress)
+        DenySettingsExcludedPrincipalsJson = $null -eq $deploymentConfig.denySettingsExcludedPrincipals ? "" : ($deploymentConfig.denySettingsExcludedPrincipals | ConvertTo-Json -AsArray -Compress)
+        TagsJson                           = $null -eq $deploymentConfig.tags ? "" : $deploymentConfig.tags | ConvertTo-Json -Compress
     }
 }
 else {
