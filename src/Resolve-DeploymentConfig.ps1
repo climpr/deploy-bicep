@@ -13,6 +13,10 @@ param (
     [Parameter(Mandatory)]
     [string]
     $GitHubEventName, 
+    
+    [Parameter(Mandatory)]
+    [bool]
+    $DeploymentWhatIf, 
 
     [switch]
     $Quiet
@@ -56,54 +60,92 @@ $deploymentConfig = Get-DeploymentConfig @param
 
 #* Create deploymentObject
 Write-Debug "[$deploymentName] Creating deploymentObject"
-$deploymentType = $deploymentConfig.type
 
-if ($deploymentType -eq "deployment" -or !$deploymentType) {
-    $deploymentObject = [pscustomobject]@{
-        Type              = "Deployment"
-        Deploy            = $true
-        ParameterFile     = $parameterFileRelativePath
-        TemplateReference = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
-        DeploymentScope   = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
-        AzureCliVersion   = $deploymentConfig.azureCliVersion
-        DeploymentConfig  = $deploymentConfig
-        DeploymentName    = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
-        Location          = $deploymentConfig.location
-        ManagementGroupId = $deploymentConfig.managementGroupId
-        ResourceGroupName = $deploymentConfig.resourceGroupName
+$deploymentObject = [pscustomobject]@{
+    Deploy            = $true
+    AzureCliVersion   = $deploymentConfig.azureCliVersion
+    Type              = $deploymentConfig.type ?? "deployment"
+    Scope             = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
+    ParameterFile     = $parameterFileRelativePath
+    TemplateReference = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
+    DeploymentConfig  = $deploymentConfig
+    Name              = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
+    Location          = $deploymentConfig.location
+    ManagementGroupId = $deploymentConfig.managementGroupId
+    ResourceGroupName = $deploymentConfig.resourceGroupName
+}
+
+$azCliCommand = @()
+switch ($deploymentObject.Scope) {
+    "resourceGroup" {
+        $azCliCommand += "az $($deploymentObject.Type) group create"
+        $azCliCommand += "--resource-group $($deploymentObject.ResourceGroupName)"
+    }
+    "subscription" { 
+        $azCliCommand += "az $($deploymentObject.Type) sub create"
+        $azCliCommand += "--location $($deploymentObject.Location)"
+    }
+    "managementGroup" {
+        $azCliCommand += "az $($deploymentObject.Type) mg create"
+        $azCliCommand += "--location $($deploymentObject.Location)"
+        $azCliCommand += "--management-group-id $($deploymentObject.ManagementGroupId)"
+    }
+    "tenant" {
+        $azCliCommand += "az $($deploymentObject.Type) tenant create"
+        $azCliCommand += "--location $($deploymentObject.Location)" 
+    }
+    default {
+        Write-Output "::error::Unknown deployment scope."
+        throw "Unknown deployment scope."
     }
 }
-elseif ($deploymentType -eq "stack") {
-    $deploymentObject = [pscustomobject]@{
-        Type                               = "Stack"
-        Deploy                             = $true
-        ParameterFile                      = $parameterFileRelativePath
-        TemplateReference                  = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
-        DeploymentScope                    = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
-        AzureCliVersion                    = $deploymentConfig.azureCliVersion
-        DeploymentConfig                   = $deploymentConfig
-        DeploymentName                     = $deploymentConfig.name
-        Location                           = $deploymentConfig.location
-        ManagementGroupId                  = $deploymentConfig.managementGroupId ?? ""
-        ResourceGroupName                  = $deploymentConfig.resourceGroupName ?? ""
-        ActionOnUnmanage                   = $deploymentConfig.actionOnUnmanage
-        BypassStackOutOfSyncError          = $deploymentConfig.bypassStackOutOfSyncError ?? $false
-        DenySettingsMode                   = $deploymentConfig.denySettingsMode
-        DenySettingsApplyToChildScopes     = $deploymentConfig.denySettingsApplyToChildScopes ?? $false
-        DenySettingsExcludedActions        = $deploymentConfig.denySettingsExcludedActions
-        DenySettingsExcludedPrincipals     = $deploymentConfig.denySettingsExcludedPrincipals
-        DeploymentResourceGroup            = $deploymentConfig.deploymentResourceGroup
-        DeploymentSubscription             = $deploymentConfig.deploymentSubscription
-        Description                        = $deploymentConfig.description
-        Tags                               = $deploymentConfig.tags
-        DenySettingsExcludedActionsJson    = $null -eq $deploymentConfig.denySettingsExcludedActions ? "" : ($deploymentConfig.denySettingsExcludedActions | ConvertTo-Json -AsArray -Compress)
-        DenySettingsExcludedPrincipalsJson = $null -eq $deploymentConfig.denySettingsExcludedPrincipals ? "" : ($deploymentConfig.denySettingsExcludedPrincipals | ConvertTo-Json -AsArray -Compress)
-        TagsJson                           = $null -eq $deploymentConfig.tags ? "" : $deploymentConfig.tags | ConvertTo-Json -Compress
+
+#* Add common parameters
+$azCliCommand += "--name $($deploymentObject.Name)"
+$azCliCommand += "--parameters $($deploymentObject.ParameterFile)"
+
+#* Add type specific parameters
+if ($deploymentObject.Type -eq "deployment") {
+    if ($DeploymentWhatIf) {
+        $azCliCommand += "--what-if"
     }
 }
-else {
-    throw "Unknown deployment type."
+elseif ($deploymentObject.Type -eq "stack") {
+    $azCliCommand += "--yes"
+    $azCliCommand += "--action-on-unmanage $($deploymentConfig.actionOnUnmanage)"
+    $azCliCommand += "--deny-settings-mode $($deploymentConfig.denySettingsMode)"
+    $azCliCommand += "--description $($deploymentConfig.description ?? '""')"
+    if ($deploymentObject.Scope -eq "subscription" -and $deploymentConfig.deploymentResourceGroup) {
+        $azCliCommand += "--deployment-resource-group $($deploymentConfig.deploymentResourceGroup)"
+    }
+    if ($deploymentObject.Scope -eq "managementGroup" -and $deploymentConfig.deploymentResourceGroup) {
+        $azCliCommand += "--deployment-subscription $($deploymentConfig.subscription)"
+    }
+    if ($deploymentConfig.bypassStackOutOfSyncError -eq $true) {
+        $azCliCommand += "--bypass-stack-out-of-sync-error"
+    }
+    if ($deploymentConfig.denySettingsApplyToChildScopes -eq $true) {
+        $azCliCommand += "--deny-settings-apply-to-child-scopes"
+    }
+    if ($null -ne $deploymentConfig.denySettingsExcludedActions) {
+        $azCliExcludedActions = ($deploymentConfig.denySettingsExcludedActions | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
+        $azCliCommand += "--deny-settings-excluded-actions $azCliExcludedActions"
+    }
+    if ($null -ne $deploymentConfig.denySettingsExcludedPrincipals) {
+        $azCliExcludedPrincipals = ($deploymentConfig.denySettingsExcludedPrincipals | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
+        $azCliCommand += "--deny-settings-excluded-principals $azCliExcludedPrincipals"
+    }
+    if ($null -ne $deploymentConfig.tags) {
+        $azCliTags = ($deploymentConfig.tags.Keys | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join " "
+        $azCliCommand += "--tags $($azCliTags ?? '""')"
+    }
+    else {
+        $azCliCommand += '--tags ""'
+    }
 }
+
+#* Add Azure Cli command to deploymentObject
+$deploymentObject.Add("AzureCliCommand", ($azCliCommand -join " "))
 
 #* Exclude disabled deployments
 Write-Debug "[$deploymentName] Checking if deployment is disabled in the deploymentconfig file."

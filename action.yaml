@@ -24,8 +24,9 @@ runs:
       shell: pwsh
       env:
         parameterFilePath: ${{ inputs.parameter-file-path }}
-        actionPath: ${{ github.action_path }}
+        whatIf: ${{ inputs.what-if == 'true' }}
         eventName: ${{ github.event_name }}
+        actionPath: ${{ github.action_path }}
         debug: ${{ runner.debug }}
       run: |
         #* Resolve-DeploymentConfig.ps1
@@ -37,29 +38,18 @@ runs:
         $deploymentConfig = & "$($env:actionPath)/src/Resolve-DeploymentConfig.ps1" `
           -ParameterFilePath $env:parameterFilePath `
           -DefaultDeploymentConfigPath "$($env:actionPath)/default.deploymentconfig.json" `
-          -GitHubEventName $env:eventName
+          -GitHubEventName $env:eventName `
+          -DeploymentWhatIf ($env:whatIf -eq $true)
 
         #* Write outputs
         $outputs = @{
-          "type"                                   = "Type"
-          "scope"                                  = "DeploymentScope"
-          "deploy"                                 = "Deploy"
-          "azure-cli-version"                      = "AzureCliVersion"
-          "parameter-file"                         = "ParameterFile"
-          "name"                                   = "DeploymentName"
-          "location"                               = "Location"
-          "management-group-id"                    = "ManagementGroupId"
-          "resource-group"                         = "ResourceGroupName"
-          "action-on-unmanage"                     = "ActionOnUnmanage"
-          "deny-settings-mode"                     = "DenySettingsMode"
-          "deployment-resource-group"              = "DeploymentResourceGroup"
-          "deployment-subscription"                = "DeploymentSubscription"
-          "bypass-stack-out-of-sync-error"         = "BypassStackOutOfSyncError"
-          "deny-settings-apply-to-child-scopes"    = "DenySettingsApplyToChildScopes"
-          "deny-settings-excluded-actions-json"    = "DenySettingsExcludedActionsJson"
-          "deny-settings-excluded-principals-json" = "DenySettingsExcludedPrincipalsJson"
-          "description"                            = "Description"
-          "tags-json"                              = "TagsJson"
+          "deploy"            = "Deploy"
+          "type"              = "Type"
+          "name"              = "DeploymentName"
+          "parameter-file"    = "ParameterFile"
+          "scope"             = "Scope"
+          "azure-cli-version" = "AzureCliVersion"
+          "azure-cli-command" = "AzureCliCommand"
         }
 
         foreach ($output in $outputs.Keys) {
@@ -71,23 +61,7 @@ runs:
       uses: azure/CLI@v2
       if: steps.resolve-deploymentconfig.outputs.deploy == 'true'
       env:
-        TYPE: ${{ steps.resolve-deploymentconfig.outputs.type }}
-        SCOPE: ${{ steps.resolve-deploymentconfig.outputs.scope }}
-        PARAMETER_FILE: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
-        DEPLOYMENT_NAME: ${{ steps.resolve-deploymentconfig.outputs.name }}
-        RESOURCE_GROUP: ${{ steps.resolve-deploymentconfig.outputs.resource-group }}
-        MANAGEMENT_GROUP_ID: ${{ steps.resolve-deploymentconfig.outputs.management-group-id }}
-        LOCATION: ${{ steps.resolve-deploymentconfig.outputs.location }}
-        ACTION_ON_UNMANAGE: ${{ steps.resolve-deploymentconfig.outputs.action-on-unmanage }}
-        DENY_SETTINGS_MODE: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-mode }}
-        DEPLOYMENT_RESOURCE_GROUP: ${{ steps.resolve-deploymentconfig.outputs.deployment-resource-group }}
-        DEPLOYMENT_SUBSCRIPTION: ${{ steps.resolve-deploymentconfig.outputs.deployment-subscription }}
-        BYPASS_STACK_OUT_OF_SYNC_ERROR: ${{ steps.resolve-deploymentconfig.outputs.bypass-stack-out-of-sync-error }}
-        DENY_SETTINGS_APPLY_TO_CHILD_SCOPES: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-apply-to-child-scopes }}
-        DENY_SETTINGS_EXCLUDED_ACTIONS_JSON: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-actions-json }}
-        DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON: ${{ steps.resolve-deploymentconfig.outputs.deny-settings-excluded-principals-json }}
-        DESCRIPTION: ${{ steps.resolve-deploymentconfig.outputs.description }}
-        TAGS_JSON: ${{ steps.resolve-deploymentconfig.outputs.tags-json }}
+        AZURE_CLI_COMMAND: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-command }}
         WHAT_IF: ${{ inputs.what-if }}
         DEBUG: ${{ runner.debug == '1' }}
       with:
@@ -164,99 +138,29 @@ runs:
           #* Set trap to call the cleanup function on ERR
           trap print_stderr ERR
 
-          #* Create deployment command
-          cmd=()
-
-          #* Determine deployment type
-          case $TYPE in
-            "Deployment")
-              type_cmd="deployment"
-              ;;
-            "Stack")
-              type_cmd="stack"
-              ;;
-            *)
-              echo "::error::Unknown deployment type." >&2
-              exit 1
-              ;;
-          esac
-
-          #* Determine deployment scope
-          case $SCOPE in
-            "resourceGroup")
-              cmd+=("az $type_cmd group create")
-              cmd+=("--resource-group $RESOURCE_GROUP")
-              ;;
-            "subscription")
-              cmd+=("az $type_cmd sub create")
-              cmd+=("--location $LOCATION")
-              ;;
-            "managementGroup")
-              cmd+=("az $type_cmd mg create")
-              cmd+=("--location $LOCATION")
-              cmd+=("--management-group-id $MANAGEMENT_GROUP_ID")
-              ;;
-            "tenant")
-              cmd+=("az $type_cmd tenant create")
-              cmd+=("--location $LOCATION")
-              ;;
-            *)
-              echo "::error::Unknown deployment scope." >&2
-              exit 1
-              ;;
-          esac
-
-          #* Add common parameters
-          cmd+=("--name $DEPLOYMENT_NAME")
-          cmd+=("--parameters $PARAMETER_FILE")
-
-          #* Add stack specific parameters
-          if [[ $TYPE == 'Stack' ]]; then
-            cmd+=("--action-on-unmanage $ACTION_ON_UNMANAGE")
-            cmd+=("--deny-settings-mode $DENY_SETTINGS_MODE")
-            if [[ $SCOPE == 'Subscription' && -n "$DEPLOYMENT_RESOURCE_GROUP" && "$DEPLOYMENT_RESOURCE_GROUP" != " " ]]; then
-              cmd+=("--deployment-resource-group $DEPLOYMENT_RESOURCE_GROUP")
-            fi
-            if [[ $SCOPE == 'ManagementGroup' && -n "$DEPLOYMENT_SUBSCRIPTION" && "$DEPLOYMENT_SUBSCRIPTION" != " " ]]; then
-              cmd+=("--deployment-resource-group $DEPLOYMENT_SUBSCRIPTION")
-            fi
-            if [[ "$BYPASS_STACK_OUT_OF_SYNC_ERROR" == 'true' ]]; then
-              cmd+=("--bypass-stack-out-of-sync-error")
-            fi
-            if [[ "$DENY_SETTINGS_APPLY_TO_CHILD_SCOPES" == 'true' ]]; then
-              cmd+=("--deny-settings-apply-to-child-scopes")
-            fi
-            if [[ -n "$DENY_SETTINGS_EXCLUDED_ACTIONS_JSON" && "$DENY_SETTINGS_EXCLUDED_ACTIONS_JSON" != " " ]]; then
-              excluded_actions_azcli=$(echo "$DENY_SETTINGS_EXCLUDED_ACTIONS_JSON" | jq -r '.[]' | paste -sd " " -)
-              cmd+=("--deny-settings-excluded-actions $excluded_actions_azcli")
-            fi
-            if [[ -n "$DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON" && "$DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON" != " " ]]; then
-              excluded_principals_azcli=$(echo "$DENY_SETTINGS_EXCLUDED_PRINCIPALS_JSON" | jq -r '.[]' | paste -sd " " -)
-              cmd+=("--deny-settings-excluded-principals $excluded_principals_azcli")
-            fi
-            if [[ -n "$TAGS_JSON" && "$TAGS_JSON" != " " ]]; then
-              tags_azcli=$(echo "$TAGS_JSON" | jq -r '.tags | to_entries | map("\(.key)=\(.value)") | map("'"'"'\(.)'"'"'") | join(" ")')
-              cmd+=("--tags ${tags_azcli:=\"\"}")
-            fi
-            cmd+=("--description ${DESCRIPTION:=\"\"}")
-            cmd+=("--yes")
+          #* Add --verbose
+          if [[ "$AZURE_CLI_COMMAND" != *"--verbose"* ]]; then
+            AZURE_CLI_COMMAND="$AZURE_CLI_COMMAND --verbose"
           fi
 
-          #* Add output and flow parameters
-          cmd+=("--verbose")
-          [[ "$WHAT_IF" == 'true'  ]] && cmd+=("--what-if")
-          [[ "$DEBUG" == 'true'  ]] && cmd+=("--debug")
+          #* Add --debug
+          if [[ "$DEBUG" == 'true' && "$AZURE_CLI_COMMAND" != *"--debug"* ]]; then
+            AZURE_CLI_COMMAND="$AZURE_CLI_COMMAND --debug"
+          fi
 
           #* Print command
+          # Convert to multiline with 2-space indentation and 1 space before backslash
+          formatted_cmd=$(echo "$AZURE_CLI_COMMAND" | sed 's/--/\n  --/g')
+
+          # Append backslashes for line continuation except the last one
+          formatted_cmd=$(echo "$formatted_cmd" | sed 's/$/\\/' | sed '$ s/\\$//')
+
+          # Print the result
           echo "Running command:"
-          printf "%s\n" "$(
-            printf "%s \\\\\n" "${cmd[@]}" |              #* Print each array element followed by " \\"
-              awk 'NR==1 {print; next} {print "  " $0}' | #* Add two spaces before all lines except the first
-              sed '$ s/ \\$//'                            #* Remove the trailing slash from the last line
-          )"
+          echo "$formatted_cmd"
 
           #* Run deployment command
-          deployment_output=$(${cmd[@]} 2> >(tee stderr.log >&2) | tee stdout.log)
+          deployment_output=$($AZURE_CLI_COMMAND 2> >(tee stderr.log >&2) | tee stdout.log)
 
           #* Write the result to console
           echo "$deployment_output"
@@ -305,7 +209,7 @@ runs:
 
     - name: PR comment for what-if deployment
       id: deployment-comment
-      if: steps.resolve-deploymentconfig.outputs.type == 'Deployment' && inputs.what-if == 'true'
+      if: steps.resolve-deploymentconfig.outputs.type == 'deployment' && inputs.what-if == 'true'
       uses: mshick/add-pr-comment@v2
       with:
         message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
