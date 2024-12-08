@@ -145,7 +145,7 @@ elseif ($deploymentObject.Type -eq "stack") {
 }
 
 #* Add Azure Cli command to deploymentObject
-$deploymentObject.Add("AzureCliCommand", ($azCliCommand -join " "))
+$deploymentObject | Add-Member -MemberType NoteProperty -Name "AzureCliCommand" -Value ($azCliCommand -join " ")
 
 #* Exclude disabled deployments
 Write-Debug "[$deploymentName] Checking if deployment is disabled in the deploymentconfig file."
