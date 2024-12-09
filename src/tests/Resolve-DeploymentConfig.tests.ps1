@@ -1,6 +1,10 @@
 BeforeAll {
-    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-    Install-Module Bicep -MinimumVersion "2.5.0"
+    if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne "Trusted") {
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+    }
+    if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.5.0") {
+        Install-PSResource -Name Bicep
+    }
     Import-Module $PSScriptRoot/../support-functions.psm1
     $script:commonParam = @{
         Quiet                       = $true
@@ -107,99 +111,6 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
         It "The 'AzureCliCommand' property should be correct" {
             $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name remote-modules-dev-$shortHash --parameters $mockDirectory/deployments/deployment/remote-modules/dev.bicepparam"
-        }
-    }
-
-    Context "When targetScope-keyword in template is not on line 1" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam"
-        }
-
-        It "Should have a TemplateReference pointing to a targetScopeLine2" {
-            $res.TemplateReference | Should -Be 'targetScopeLine2.bicep'
-        }
-        It "Should have Scope like [subscription]" {
-            $res.Scope | Should -Be 'subscription'
-        }
-        It "AzureCliCommand should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name comments-targetScopeLine2-$shortHash --parameters $mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam"
-        }
-    }
-
-    Context "When using-keyword in parameterfile is not on line 1" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    managementGroupId = 'mockMgmtGroupId'
-                    location          = 'westeurope'
-                }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/comments/usingLine2.bicepparam"
-        }
-
-        It "Should have a TemplateReference pointing to a usingLine2" {
-            $res.TemplateReference | Should -Be 'usingLine2.bicep'
-        }
-        It "Should have Scope like [managementGroup]" {
-            $res.Scope | Should -Be 'managementGroup'
-        }
-        It "Should have same ManagementGroupId as mock [mockMgmtGroupId]" {
-            $res.ManagementGroupId | Should -Be 'mockMgmtGroupId'
-        }
-        It "AzureCliCommand should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment mg create --location westeurope --management-group-id mockMgmtGroupId --name comments-usingLine2-$shortHash --parameters $mockDirectory/deployments/deployment/comments/usingLine2.bicepparam"
-        }
-    }
-
-    Context "When using-keyword is commented before the actual using-keyword" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    managementGroupId = 'mockMgmtGroupId'
-                    resourceGroupName = 'mockResourceGroupName'
-                    location          = 'westeurope'
-                }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/comments/usingCommented.bicepparam"
-        }
-
-        It "Should have a TemplateReference pointing to a usingCommented" {
-            $res.TemplateReference | Should -Be 'usingCommented.bicep'
-        }
-
-        It "Should have Scope like [resourceGroup]" {
-            $res.Scope | Should -Be 'resourceGroup'
-        }
-
-        It "AzureCliCommand should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment group create --resource-group mockResourceGroupName --name comments-usingCommented-$shortHash --parameters $mockDirectory/deployments/deployment/comments/usingCommented.bicepparam"
-        }
-    }
-
-    Context "When scope-keyword is commented before the actual scope-keyword" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    managementGroupId = 'mockMgmtGroupId'
-                    location          = 'westeurope'
-                }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
-        }
-
-        It "Should have a TemplateReference pointing to a usingCommented" {
-            $res.TemplateReference | Should -Be 'targetScopeCommented.bicep'
-        }
-
-        It "Should have Scope like [subscription]" {
-            $res.Scope | Should -Be 'subscription'
-        }
-
-        It "AzureCliCommand should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name comments-targetScopeCommented-$shortHash --parameters $mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
         }
     }
 

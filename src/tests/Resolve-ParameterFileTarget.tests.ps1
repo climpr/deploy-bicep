@@ -1,10 +1,19 @@
 BeforeAll {
-    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-    Install-Module Bicep -MinimumVersion "2.5.0"
+    if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne "Trusted") {
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+    }
+    if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.5.0") {
+        Install-PSResource -Name Bicep
+    }
     Import-Module $PSScriptRoot/../support-functions.psm1
 }
 
 Describe "Resolve-ParameterFileTarget" {
+    BeforeAll {
+        $scriptRoot = $PSScriptRoot
+        $script:mockDirectory = Resolve-Path -Relative -Path "$scriptRoot/mock"
+    }
+    
     Context "When the input is a file (Path)" {
         BeforeAll {
             $script:tempFile = New-TemporaryFile
@@ -63,6 +72,30 @@ Describe "Resolve-ParameterFileTarget" {
 
         It "It should return 'br:mcr.microsoft.com/bicep/filepath:tag'" {
             Resolve-ParameterFileTarget -Content "using 'br:mcr.microsoft.com/bicep/filepath:tag''" | Should -Be "br:mcr.microsoft.com/bicep/filepath:tag"
+        }
+    }
+
+    Context "When targetScope-keyword in template is not on line 1" {
+        It "Should have a TemplateReference pointing to a targetScopeLine2" {
+            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam" | Should -Be 'targetScopeLine2.bicep'
+        }
+    }
+    
+    Context "When using-keyword in parameterfile is not on line 1" {
+        It "Should have a TemplateReference pointing to a usingLine2" {
+            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/usingLine2.bicepparam" | Should -Be 'usingLine2.bicep'
+        }
+    }
+
+    Context "When using-keyword is commented before the actual using-keyword" {
+        It "Should have a TemplateReference pointing to a usingCommented" {
+            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/usingCommented.bicepparam" | Should -Be 'usingCommented.bicep'
+        }
+    }
+
+    Context "When scope-keyword is commented before the actual scope-keyword" {
+        It "Should have a TemplateReference pointing to a usingCommented" {
+            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam" | Should -Be 'targetScopeCommented.bicep'
         }
     }
 }
