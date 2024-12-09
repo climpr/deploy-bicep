@@ -1,6 +1,6 @@
 BeforeAll {
-    if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne "Trusted") {
-        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+    if ((Get-PSResourceRepository -Name PSGallery).Trusted -eq $false) {
+        Set-PSResourceRepository -Name PSGallery -Trusted -Confirm:$false
     }
     if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.5.0") {
         Install-PSResource -Name Bicep
