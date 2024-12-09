@@ -24,8 +24,9 @@ runs:
       shell: pwsh
       env:
         parameterFilePath: ${{ inputs.parameter-file-path }}
-        actionPath: ${{ github.action_path }}
+        whatIf: ${{ inputs.what-if == 'true' }}
         eventName: ${{ github.event_name }}
+        actionPath: ${{ github.action_path }}
         debug: ${{ runner.debug }}
       run: |
         #* Resolve-DeploymentConfig.ps1
@@ -37,29 +38,30 @@ runs:
         $deploymentConfig = & "$($env:actionPath)/src/Resolve-DeploymentConfig.ps1" `
           -ParameterFilePath $env:parameterFilePath `
           -DefaultDeploymentConfigPath "$($env:actionPath)/default.deploymentconfig.json" `
-          -GitHubEventName $env:eventName
+          -GitHubEventName $env:eventName `
+          -DeploymentWhatIf ($env:whatIf -eq $true)
 
         #* Write outputs
-        Write-Output "deploy=$($deploymentConfig.Deploy)" >> $env:GITHUB_OUTPUT
-        Write-Output "name=$($deploymentConfig.DeploymentName)" >> $env:GITHUB_OUTPUT
-        Write-Output "parameter-file=$($deploymentConfig.ParameterFile)" >> $env:GITHUB_OUTPUT
-        Write-Output "scope=$($deploymentConfig.DeploymentScope)" >> $env:GITHUB_OUTPUT
-        Write-Output "location=$($deploymentConfig.Location)" >> $env:GITHUB_OUTPUT
-        Write-Output "resource-group=$($deploymentConfig.ResourceGroupName)" >> $env:GITHUB_OUTPUT
-        Write-Output "management-group-id=$($deploymentConfig.ManagementGroupId)" >> $env:GITHUB_OUTPUT
-        Write-Output "azure-cli-version=$($deploymentConfig.AzureCliVersion)" >> $env:GITHUB_OUTPUT
+        $outputs = @{
+          "deploy"            = "Deploy"
+          "type"              = "Type"
+          "name"              = "DeploymentName"
+          "parameter-file"    = "ParameterFile"
+          "scope"             = "Scope"
+          "azure-cli-version" = "AzureCliVersion"
+          "azure-cli-command" = "AzureCliCommand"
+        }
+
+        foreach ($output in $outputs.Keys) {
+          Write-Output "$($output)=$($deploymentConfig.($outputs[$output]))" >> $env:GITHUB_OUTPUT
+        }
 
     - name: Bicep deployment
       id: bicep-deployment
       uses: azure/CLI@v2
       if: steps.resolve-deploymentconfig.outputs.deploy == 'true'
       env:
-        SCOPE: ${{ steps.resolve-deploymentconfig.outputs.scope }}
-        PARAMETER_FILE: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
-        DEPLOYMENT_NAME: ${{ steps.resolve-deploymentconfig.outputs.name }}
-        RESOURCE_GROUP: ${{ steps.resolve-deploymentconfig.outputs.resource-group }}
-        MANAGEMENT_GROUP_ID: ${{ steps.resolve-deploymentconfig.outputs.management-group-id }}
-        LOCATION: ${{ steps.resolve-deploymentconfig.outputs.location }}
+        AZURE_CLI_COMMAND: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-command }}
         WHAT_IF: ${{ inputs.what-if }}
         DEBUG: ${{ runner.debug == '1' }}
       with:
@@ -101,9 +103,9 @@ runs:
                   #* Choose color based on prefix
                   local color=""
                   case "$prefix" in
-                  WARNING) color="\e[33m" ;; #* Yellow
-                  ERROR) color="\e[31m" ;;   #* Red
-                  *) color="\e[37m" ;;       #* Default (white/gray)
+                    WARNING) color="\e[33m" ;; #* Yellow
+                    ERROR) color="\e[31m" ;;   #* Red
+                    *) color="\e[37m" ;;       #* Default (white/gray)
                   esac
 
                   #* Check if message is JSON
@@ -112,7 +114,6 @@ runs:
                     formatted_json=$(echo "$message" | jq . 2>/dev/null | while IFS= read -r json_line || [[ -n $json_line ]]; do
                       echo -e "${color}${json_line}\e[0m"
                     done)
-
 
                     #* Print GitHub annotation
                     if [[ $prefix == "ERROR" ]]; then
@@ -137,49 +138,29 @@ runs:
           #* Set trap to call the cleanup function on ERR
           trap print_stderr ERR
 
-          #* Create deployment command
-          cmd=()
-          case $SCOPE in
-          resourceGroup)
-            cmd+=("az deployment group create")
-            cmd+=("--resource-group $RESOURCE_GROUP")
-            ;;
-          subscription)
-            cmd+=("az deployment sub create")
-            cmd+=("--location $LOCATION")
-            ;;
-          managementGroup)
-            cmd+=("az deployment mg create")
-            cmd+=("--location $LOCATION")
-            cmd+=("--management-group-id $MANAGEMENT_GROUP_ID")
-            ;;
-          tenant)
-            cmd+=("az deployment tenant create")
-            cmd+=("--location $LOCATION")
-            ;;
-          *)
-            echo "::error::Unknown deployment scope." >&2
-            exit 1
-            ;;
-          esac
+          #* Add --verbose
+          if [[ "$AZURE_CLI_COMMAND" != *"--verbose"* ]]; then
+            AZURE_CLI_COMMAND="$AZURE_CLI_COMMAND --verbose"
+          fi
 
-          #* Add common parameters
-          cmd+=("--parameters $PARAMETER_FILE")
-          cmd+=("--name $DEPLOYMENT_NAME")
-          cmd+=("--verbose")
-          cmd+=($([[ $WHAT_IF == 'true' ]] && echo "--what-if" || echo ""))
-          cmd+=($([[ $DEBUG == 'true' ]] && echo "--debug" || echo ""))
+          #* Add --debug
+          if [[ "$DEBUG" == 'true' && "$AZURE_CLI_COMMAND" != *"--debug"* ]]; then
+            AZURE_CLI_COMMAND="$AZURE_CLI_COMMAND --debug"
+          fi
 
           #* Print command
+          # Convert to multiline with 2-space indentation and 1 space before backslash
+          formatted_cmd=$(echo "$AZURE_CLI_COMMAND" | sed 's/--/\n  --/g')
+
+          # Append backslashes for line continuation except the last one
+          formatted_cmd=$(echo "$formatted_cmd" | sed 's/$/\\/' | sed '$ s/\\$//')
+
+          # Print the result
           echo "Running command:"
-          printf "%s\n" "$(
-            printf "%s \\\\\n" "${cmd[@]}" |              #* Print each array element followed by " \\"
-              awk 'NR==1 {print; next} {print "  " $0}' | #* Add two spaces before all lines except the first
-              sed '$ s/ \\$//'                            #* Remove the trailing slash from the last line
-          )"
+          echo "$formatted_cmd"
 
           #* Run deployment command
-          deployment_output=$(${cmd[@]} 2> >(tee stderr.log >&2) | tee stdout.log)
+          deployment_output=$($AZURE_CLI_COMMAND 2> >(tee stderr.log >&2) | tee stdout.log)
 
           #* Write the result to console
           echo "$deployment_output"
@@ -228,7 +209,7 @@ runs:
 
     - name: PR comment for what-if deployment
       id: deployment-comment
-      if: inputs.what-if == 'true'
+      if: steps.resolve-deploymentconfig.outputs.type == 'deployment' && inputs.what-if == 'true'
       uses: mshick/add-pr-comment@v2
       with:
         message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}

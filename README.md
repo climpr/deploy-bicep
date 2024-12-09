@@ -1,6 +1,6 @@
 # Deploy Bicep
 
-This action deploys a Bicep deployment based on a `.bicepparam`file.
+This action deploys a Bicep deployment or a Deployment Stack based on a `.bicepparam`file.
 It supports the use of the `deploymentconfig.json` or `deploymentconfig.jsonc` file for advanced deployment options.
 
 ## How to use this action
