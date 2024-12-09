@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/climpr/climpr-schemas/refs/heads/feat-az-stacks/schemas/v1.0.0/bicep-deployment/deploymentconfig.json#",
+  "type": "stack",
+  "name": "default-stack",
+  "actionOnUnmanage": "deleteAll",
+  "denySettingsMode": "denyDelete"
+}

@@ -14,7 +14,7 @@ param (
     [string]
     $GitHubEventName, 
     
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory = $false)]
     [bool]
     $DeploymentWhatIf = $false, 
 
@@ -69,7 +69,7 @@ $deploymentObject = [pscustomobject]@{
     ParameterFile     = $parameterFileRelativePath
     TemplateReference = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
     DeploymentConfig  = $deploymentConfig
-    Name              = $deploymentConfig.name ?? "$deploymentName-$([Datetime]::Now.ToString("yyyyMMdd-HHmmss"))"
+    Name              = $deploymentConfig.name ?? "$deploymentName-$environmentName-$(git rev-parse --short HEAD)"
     Location          = $deploymentConfig.location
     ManagementGroupId = $deploymentConfig.managementGroupId
     ResourceGroupName = $deploymentConfig.resourceGroupName
@@ -114,12 +114,17 @@ elseif ($deploymentObject.Type -eq "stack") {
     $azCliCommand += "--yes"
     $azCliCommand += "--action-on-unmanage $($deploymentConfig.actionOnUnmanage)"
     $azCliCommand += "--deny-settings-mode $($deploymentConfig.denySettingsMode)"
-    $azCliCommand += "--description $($deploymentConfig.description ?? '""""')"
+    if ([string]::IsNullOrEmpty($deploymentObject.description)) {
+        $azCliCommand += '--description ""'
+    }
+    else {
+        $azCliCommand += "--description $($deploymentConfig.description)"
+    }
     if ($deploymentObject.Scope -eq "subscription" -and $deploymentConfig.deploymentResourceGroup) {
         $azCliCommand += "--deployment-resource-group $($deploymentConfig.deploymentResourceGroup)"
     }
-    if ($deploymentObject.Scope -eq "managementGroup" -and $deploymentConfig.deploymentResourceGroup) {
-        $azCliCommand += "--deployment-subscription $($deploymentConfig.subscription)"
+    if ($deploymentObject.Scope -eq "managementGroup" -and $deploymentConfig.deploymentSubscription) {
+        $azCliCommand += "--deployment-subscription $($deploymentConfig.deploymentSubscription)"
     }
     if ($deploymentConfig.bypassStackOutOfSyncError -eq $true) {
         $azCliCommand += "--bypass-stack-out-of-sync-error"
@@ -129,15 +134,25 @@ elseif ($deploymentObject.Type -eq "stack") {
     }
     if ($null -ne $deploymentConfig.denySettingsExcludedActions) {
         $azCliExcludedActions = ($deploymentConfig.denySettingsExcludedActions | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
-        $azCliCommand += "--deny-settings-excluded-actions $azCliExcludedActions"
+        if ($azCliExcludedActions.Length -eq 0) {
+            $azCliCommand += '--deny-settings-excluded-actions ""'
+        }
+        else {
+            $azCliCommand += "--deny-settings-excluded-actions $azCliExcludedActions"
+        }
     }
     if ($null -ne $deploymentConfig.denySettingsExcludedPrincipals) {
         $azCliExcludedPrincipals = ($deploymentConfig.denySettingsExcludedPrincipals | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
-        $azCliCommand += "--deny-settings-excluded-principals $azCliExcludedPrincipals"
+        if ($azCliExcludedPrincipals.Length -eq 0) {
+            $azCliCommand += '--deny-settings-excluded-principals ""'
+        }
+        else {
+            $azCliCommand += "--deny-settings-excluded-principals $azCliExcludedPrincipals"
+        }
     }
-    if ($null -ne $deploymentConfig.tags) {
+    if ($null -ne $deploymentConfig.tags -and $deploymentConfig.tags.Count -ge 1) {
         $azCliTags = ($deploymentConfig.tags.Keys | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join " "
-        $azCliCommand += "--tags $($azCliTags ?? '""""')"
+        $azCliCommand += "--tags $azCliTags"
     }
     else {
         $azCliCommand += '--tags ""'
