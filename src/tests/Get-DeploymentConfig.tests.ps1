@@ -1,15 +1,12 @@
 BeforeAll {
     Import-Module $PSScriptRoot/../support-functions.psm1
+    $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
     $script:commonParam = @{
         DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
     }
 }
 
 Describe "Resolve-DeploymentConfig.ps1" {
-    BeforeAll {
-        $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
-    }
-
     Context "With .json deploymentconfig file" {
         BeforeAll {
             $script:param = @{

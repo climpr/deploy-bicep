@@ -2,18 +2,14 @@ BeforeAll {
     if ((Get-PSResourceRepository -Name PSGallery).Trusted -eq $false) {
         Set-PSResourceRepository -Name PSGallery -Trusted -Confirm:$false
     }
-    if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.5.0") {
+    if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.7.0") {
         Install-PSResource -Name Bicep
     }
     Import-Module $PSScriptRoot/../support-functions.psm1
+    $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
 }
 
 Describe "Resolve-ParameterFileTarget" {
-    BeforeAll {
-        $scriptRoot = $PSScriptRoot
-        $script:mockDirectory = Resolve-Path -Relative -Path "$scriptRoot/mock"
-    }
-
     Context "When the input is a file (Path)" {
         BeforeAll {
             $script:tempFile = New-TemporaryFile
