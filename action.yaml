@@ -2,9 +2,15 @@ name: Deploy Bicep deployment
 description: Parses a Bicep deployment based on the .bicepparam file and deploys to Azure
 
 inputs:
-  parameter-file-path:
-    description: The path to the .bicepparam file.
+  deployment-file-path:
+    description: The path to the .bicep or .bicepparam file.
     required: true
+  
+  #* [Deprecated] Kept for backward compatibility
+  parameter-file-path:
+    description: "[Deprecated] The path to the .bicepparam file. (Use deployment-file-path instead)"
+    required: false
+  
   what-if:
     description: Setting this to true will run the deployment commands in what-if mode.
     required: false
@@ -19,11 +25,23 @@ runs:
         modules: |
           Bicep:2.5.0
 
+    - name: Resolve parameter
+      id: get-input
+      shell: pwsh
+      env:
+        deploymentFilePath: ${{ inputs.deployment-file-path }}
+        parameterFilePath: ${{ inputs.parameter-file-path }}
+      run: |
+        $deploymentFilePath = ![string]::IsNullOrWhiteSpace($env:deploymentFilePath) `
+          ? $env:deploymentFilePath `
+          : $env:parameterFilePath
+        Write-Output "deployment-file-path=$deploymentFilePath" >> $env:GITHUB_OUTPUT
+
     - name: Resolve deployment configuration
       id: resolve-deploymentconfig
       shell: pwsh
       env:
-        parameterFilePath: ${{ inputs.parameter-file-path }}
+        deploymentFilePath: ${{ steps.get-input.outputs.deployment-file-path }}
         whatIf: ${{ inputs.what-if == 'true' }}
         eventName: ${{ github.event_name }}
         actionPath: ${{ github.action_path }}
@@ -36,7 +54,7 @@ runs:
 
         #* Parse deployment
         $deploymentConfig = & "$($env:actionPath)/src/Resolve-DeploymentConfig.ps1" `
-          -ParameterFilePath $env:parameterFilePath `
+          -DeploymentFilePath $env:deploymentFilePath `
           -DefaultDeploymentConfigPath "$($env:actionPath)/default.deploymentconfig.json" `
           -GitHubEventName $env:eventName `
           -DeploymentWhatIf ($env:whatIf -eq $true)
@@ -46,7 +64,7 @@ runs:
           "deploy"            = "Deploy"
           "type"              = "Type"
           "name"              = "DeploymentName"
-          "parameter-file"    = "ParameterFile"
+          "environment"       = "Environment"
           "scope"             = "Scope"
           "azure-cli-version" = "AzureCliVersion"
           "azure-cli-command" = "AzureCliCommand"
@@ -195,13 +213,13 @@ runs:
       if: inputs.what-if == 'true'
       shell: bash
       env:
-        parameterFile: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
-        scope: ${{ steps.resolve-deploymentconfig.outputs.scope }}
+        NAME: ${{ steps.resolve-deploymentconfig.outputs.name }}
+        ENVIRONMENT: ${{ steps.resolve-deploymentconfig.outputs.environment }}
+        SCOPE: ${{ steps.resolve-deploymentconfig.outputs.scope }}
       run: |
-        deployment_name=$(echo $parameterFile | awk -F '/' '{print $(NF-1)}')
-        echo "**Deployment Name: $deployment_name**" > commitMessageAndId.md
-        echo "**Deployment Environment: $(basename $parameterFile | awk -F '.' '{print $(NF-1)}')**" >> commitMessageAndId.md
-        echo "**Deployment Scope:** $scope" >> commitMessageAndId.md
+        echo "**Deployment Name: $NAME**" > commitMessageAndId.md
+        echo "**Deployment Environment: $ENVIRONMENT**" >> commitMessageAndId.md
+        echo "**Deployment Scope:** $SCOPE" >> commitMessageAndId.md
         echo "**Commit ID:** $(git rev-parse HEAD)" >> commitMessageAndId.md
         echo "**Commit Message:** $(git log -1 --pretty=%B)" >> commitMessageAndId.md
         cat deployment.md >> commitMessageAndId.md
@@ -212,7 +230,7 @@ runs:
       if: steps.resolve-deploymentconfig.outputs.type == 'deployment' && inputs.what-if == 'true'
       uses: mshick/add-pr-comment@v2
       with:
-        message-id: ${{ steps.resolve-deploymentconfig.outputs.parameter-file }}
+        message-id: "${{ steps.resolve-deploymentconfig.outputs.name }}-${{ steps.resolve-deploymentconfig.outputs.environment }}"
         message-path: deployment.md
 
     - name: Clean created files
