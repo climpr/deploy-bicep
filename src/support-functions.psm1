@@ -289,7 +289,6 @@ function Join-HashTable {
     return $Hashtable2
 }
 
-
 function ConvertTo-UncommentedBicep {
     [CmdletBinding()]
     param (
