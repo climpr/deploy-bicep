@@ -8,7 +8,7 @@ function Get-DeploymentConfig {
         
         [Parameter(Mandatory)]
         [string]
-        $ParameterFileName,
+        $DeploymentFileName,
         
         [ValidateScript({ $_ | Test-Path -PathType Leaf })]
         [string]
@@ -37,8 +37,8 @@ function Get-DeploymentConfig {
 
     #* Parse most specific deploymentconfig file
     $fileNames = @(
-        $ParameterFileName -replace "\.bicepparam$", ".deploymentconfig.json"
-        $ParameterFileName -replace "\.bicepparam$", ".deploymentconfig.jsonc"
+        $DeploymentFileName -replace "\.(bicep|bicepparam)$", ".deploymentconfig.json"
+        $DeploymentFileName -replace "\.(bicep|bicepparam)$", ".deploymentconfig.jsonc"
         "deploymentconfig.json"
         "deploymentconfig.jsonc"
     )
@@ -112,111 +112,118 @@ function Resolve-TemplateDeploymentScope {
     [CmdletBinding()]
     param (
         [parameter(Mandatory)]
+        [ValidateScript({ $_ | Test-Path -PathType Leaf })]
         [string]
-        $ParameterFilePath,
+        $DeploymentFilePath,
 
         [parameter(Mandatory)]
         [hashtable]
         $DeploymentConfig
     )
 
+    $targetScope = ""
+    $deploymentFile = Get-Item -Path $DeploymentFilePath
+    
     if ($DeploymentConfig.scope) {
         Write-Debug "[Resolve-TemplateDeploymentScope()] TargetScope determined by scope property in deploymentconfig.json file"
         $targetScope = $DeploymentConfig.scope
     }
+    elseif ($deploymentFile.Extension -eq ".bicep") {
+        $referenceString = $deploymentFile.Name
+    }
+    elseif ($deploymentFile.Extension -eq ".bicepparam") {
+        $referenceString = Resolve-ParameterFileTarget -Path $DeploymentFilePath
+    }
     else {
-        $targetScope = ""
+        throw "Deployment file extension not supported. Only .bicep and .bicepparam is supported. Input deployment file extension: '$($deploymentFile.Extension)'"
+    }
 
-        $parameterFile = Get-Item -Path $ParameterFilePath
-        $referenceString = Resolve-ParameterFileTarget -Path $ParameterFilePath
+    if ($referenceString -match "^(br|ts)[\/:]") {
+        #* Is remote template
 
-        if ($referenceString -match "^(br|ts)[\/:]") {
-            #* Is remote template
+        #* Resolve local cache path
+        if ($referenceString -match "^(br|ts)\/(.+?):(.+?):(.+?)$") {
+            #* Is alias
 
-            #* Resolve local cache path
-            if ($referenceString -match "^(br|ts)\/(.+?):(.+?):(.+?)$") {
-                #* Is alias
-
-                #* Get active bicepconfig.json
-                $bicepConfig = Get-BicepConfig -Path $ParameterFilePath | Select-Object -ExpandProperty Config | ConvertFrom-Json -AsHashtable -NoEnumerate
+            #* Get active bicepconfig.json
+            $bicepConfig = Get-BicepConfig -Path $DeploymentFilePath | Select-Object -ExpandProperty Config | ConvertFrom-Json -AsHashtable -NoEnumerate
             
-                $type = $Matches[1]
-                $alias = $Matches[2]
-                $registryFqdn = $bicepConfig.moduleAliases[$type][$alias].registry
-                $modulePath = $bicepConfig.moduleAliases[$type][$alias].modulePath
-                $templateName = $Matches[3]
-                $version = $Matches[4]
-                $modulePathElements = $($modulePath -split "/"; $templateName -split "/")
-            }
-            elseif ($referenceString -match "^(br|ts):(.+?)/(.+?):(.+?)$") {
-                #* Is FQDN
-                $type = $Matches[1]
-                $registryFqdn = $Matches[2]
-                $modulePath = $Matches[3]
-                $version = $Matches[4]
-                $modulePathElements = $modulePath -split "/"
-            }
-
-            #* Find cached template reference
-            $cachePath = "~/.bicep/$type/$registryFqdn/$($modulePathElements -join "$")/$version`$/"
-
-            if (!(Test-Path -Path $cachePath)) {
-                #* Restore .bicep or .bicepparam file to ensure templates are located in the cache
-                bicep restore $ParameterFilePath
-
-                Write-Debug "[Resolve-TemplateDeploymentScope()] Target template is not cached locally. Running force restore operation on template."
-            
-                if (Test-Path -Path $cachePath) {
-                    Write-Debug "[Resolve-TemplateDeploymentScope()] Target template cached successfully."
-                }
-                else {
-                    Write-Debug "[Resolve-TemplateDeploymentScope()] Target template failed to restore. Target reference string: '$referenceString'. Local cache path: '$cachePath'"
-                    throw "Unable to restore target template '$referenceString'"
-                }
-            }
-
-            #* Resolve deployment scope
-            $armTemplate = Get-Content -Path "$cachePath/main.json" | ConvertFrom-Json -Depth 30 -AsHashtable -NoEnumerate
-        
-            switch -Regex ($armTemplate.'$schema') {
-                "^.+?\/deploymentTemplate\.json#" {
-                    $targetScope = "resourceGroup"
-                }
-                "^.+?\/subscriptionDeploymentTemplate\.json#" {
-                    $targetScope = "subscription" 
-                }
-                "^.+?\/managementGroupDeploymentTemplate\.json#" {
-                    $targetScope = "managementGroup" 
-                }
-                "^.+?\/tenantDeploymentTemplate\.json#" {
-                    $targetScope = "tenant" 
-                }
-                default {
-                    throw "[Resolve-TemplateDeploymentScope()] Non-supported `$schema property in target template. Unable to ascertain the deployment scope." 
-                }
-            }
+            $type = $Matches[1]
+            $alias = $Matches[2]
+            $registryFqdn = $bicepConfig.moduleAliases[$type][$alias].registry
+            $modulePath = $bicepConfig.moduleAliases[$type][$alias].modulePath
+            $templateName = $Matches[3]
+            $version = $Matches[4]
+            $modulePathElements = $($modulePath -split "/"; $templateName -split "/")
         }
-        else {
-            #* Is local template
-            Push-Location -Path $parameterFile.Directory.FullName
-        
-            #* Regex for finding 'targetScope' statement in template file
-            $content = Get-Content -Path $referenceString
-            $cleanContent = ConvertTo-UncommentedBicep -Content $content
-            $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
-            $templateMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
+        elseif ($referenceString -match "^(br|ts):(.+?)/(.+?):(.+?)$") {
+            #* Is FQDN
+            $type = $Matches[1]
+            $registryFqdn = $Matches[2]
+            $modulePath = $Matches[3]
+            $version = $Matches[4]
+            $modulePathElements = $modulePath -split "/"
+        }
 
-            Pop-Location
+        #* Find cached template reference
+        $cachePath = "~/.bicep/$type/$registryFqdn/$($modulePathElements -join "$")/$version`$/"
 
-            if ($templateMatchesRegex) {
-                $targetScope = $templateMatchesRegex.Matches.Groups[1].Value
-                Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement found in template file content."
-                Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($targetScope)'"
+        if (!(Test-Path -Path $cachePath)) {
+            #* Restore .bicep or .bicepparam file to ensure templates are located in the cache
+            bicep restore $DeploymentFilePath
+
+            Write-Debug "[Resolve-TemplateDeploymentScope()] Target template is not cached locally. Running force restore operation on template."
+            
+            if (Test-Path -Path $cachePath) {
+                Write-Debug "[Resolve-TemplateDeploymentScope()] Target template cached successfully."
             }
             else {
-                Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement not found in parameter file content. Defaulting to resourceGroup scope"
+                Write-Debug "[Resolve-TemplateDeploymentScope()] Target template failed to restore. Target reference string: '$referenceString'. Local cache path: '$cachePath'"
+                throw "Unable to restore target template '$referenceString'"
+            }
+        }
+
+        #* Resolve deployment scope
+        $armTemplate = Get-Content -Path "$cachePath/main.json" | ConvertFrom-Json -Depth 30 -AsHashtable -NoEnumerate
+        
+        switch -Regex ($armTemplate.'$schema') {
+            "^.+?\/deploymentTemplate\.json#" {
                 $targetScope = "resourceGroup"
             }
+            "^.+?\/subscriptionDeploymentTemplate\.json#" {
+                $targetScope = "subscription" 
+            }
+            "^.+?\/managementGroupDeploymentTemplate\.json#" {
+                $targetScope = "managementGroup" 
+            }
+            "^.+?\/tenantDeploymentTemplate\.json#" {
+                $targetScope = "tenant" 
+            }
+            default {
+                throw "[Resolve-TemplateDeploymentScope()] Non-supported `$schema property in target template. Unable to ascertain the deployment scope." 
+            }
+        }
+    }
+    else {
+        #* Is local template
+        Push-Location -Path $deploymentFile.Directory.FullName
+        
+        #* Regex for finding 'targetScope' statement in template file
+        $content = Get-Content -Path $referenceString
+        $cleanContent = ConvertTo-UncommentedBicep -Content $content
+        $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
+        $templateMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
+
+        Pop-Location
+
+        if ($templateMatchesRegex) {
+            $targetScope = $templateMatchesRegex.Matches.Groups[1].Value
+            Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement found in template file content."
+            Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($targetScope)'"
+        }
+        else {
+            Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement not found in parameter file content. Defaulting to resourceGroup scope"
+            $targetScope = "resourceGroup"
         }
     }
 
@@ -281,7 +288,6 @@ function Join-HashTable {
     
     return $Hashtable2
 }
-
 
 function ConvertTo-UncommentedBicep {
     [CmdletBinding()]

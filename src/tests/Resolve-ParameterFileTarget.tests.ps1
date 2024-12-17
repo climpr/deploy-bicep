@@ -5,7 +5,7 @@ BeforeAll {
     if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.7.0") {
         Install-PSResource -Name Bicep
     }
-    Import-Module $PSScriptRoot/../support-functions.psm1
+    Import-Module $PSScriptRoot/../support-functions.psm1 -Force
     $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
 }
 

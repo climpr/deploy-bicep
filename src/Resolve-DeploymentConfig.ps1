@@ -3,7 +3,7 @@ param (
     [Parameter(Mandatory)]
     [ValidateScript({ $_ | Test-Path -PathType Leaf })]
     [string]
-    $ParameterFilePath,
+    $DeploymentFilePath,
     
     [Parameter(Mandatory)]
     [ValidateScript({ $_ | Test-Path -PathType Leaf })]
@@ -34,29 +34,44 @@ Write-Debug "Script root directory: $(Resolve-Path -Relative -Path $scriptRoot)"
 Import-Module $scriptRoot/support-functions.psm1 -Force
 
 #* Resolve files
-$parameterFile = Get-Item -Path $ParameterFilePath
-$parameterFileRelativePath = Resolve-Path -Relative -Path $parameterFile.FullName
-$environmentName = ($parameterFile.BaseName -split "\.")[0]
-$deploymentDirectory = $parameterFile.Directory
+$deploymentFile = Get-Item -Path $DeploymentFilePath
+$deploymentFileRelativePath = Resolve-Path -Relative -Path $deploymentFile.FullName
+$environmentName = ($deploymentFile.BaseName -split "\.")[0]
+$deploymentDirectory = $deploymentFile.Directory
 $deploymentRelativePath = Resolve-Path -Relative -Path $deploymentDirectory.FullName
-$parameterFileName = $parameterFile.Name
+$deploymentFileName = $deploymentFile.Name
 Write-Debug "[$($deploymentDirectory.Name)] Deployment directory path: $deploymentRelativePath"
-Write-Debug "[$($deploymentDirectory.Name)] Parameter file path: $parameterFileRelativePath"
+Write-Debug "[$($deploymentDirectory.Name)] Deployment file path: $deploymentFileRelativePath"
 
 #* Resolve deployment name
 $deploymentName = $deploymentDirectory.Name
 
 #* Create deployment objects
-Write-Debug "[$deploymentName][$environmentName] Processing parameter file: $parameterFileRelativePath"
+Write-Debug "[$deploymentName][$environmentName] Processing deployment file: $deploymentFileRelativePath"
 
 #* Get deploymentConfig
 $param = @{
     DeploymentDirectoryPath     = $deploymentRelativePath
-    ParameterFileName           = $parameterFileName
+    DeploymentFileName          = $deploymentFileName
     DefaultDeploymentConfigPath = $DefaultDeploymentConfigPath
     Debug                       = ([bool]($PSBoundParameters.Debug))
 }
 $deploymentConfig = Get-DeploymentConfig @param
+
+#* Determine deployment file type
+if ($deploymentFile.Extension -eq ".bicepparam") {
+    #* Is .bicepparam
+    $templateReference = Resolve-ParameterFileTarget -Path $deploymentFileRelativePath
+    $parameterFile = $deploymentFileRelativePath
+}
+elseif ($deploymentFile.Extension -eq ".bicep") {
+    #* Is .bicep
+    $templateReference = $deploymentFileRelativePath
+    $parameterFile = $null
+}
+else {
+    throw "Deployment file extension not supported. Only .bicep and .bicepparam is supported. Input deployment file extension: '$($deploymentFile.Extension)'"
+}
 
 #* Create deploymentObject
 Write-Debug "[$deploymentName] Creating deploymentObject"
@@ -64,10 +79,11 @@ Write-Debug "[$deploymentName] Creating deploymentObject"
 $deploymentObject = [pscustomobject]@{
     Deploy            = $true
     AzureCliVersion   = $deploymentConfig.azureCliVersion
+    Environment       = $environmentName
     Type              = $deploymentConfig.type ?? "deployment"
-    Scope             = Resolve-TemplateDeploymentScope -ParameterFilePath $parameterFileRelativePath -DeploymentConfig $deploymentConfig
-    ParameterFile     = $parameterFileRelativePath
-    TemplateReference = Resolve-ParameterFileTarget -Path $parameterFileRelativePath
+    Scope             = Resolve-TemplateDeploymentScope -DeploymentFilePath $deploymentFileRelativePath -DeploymentConfig $deploymentConfig
+    ParameterFile     = $parameterFile
+    TemplateReference = $templateReference
     DeploymentConfig  = $deploymentConfig
     Name              = $deploymentConfig.name ?? "$deploymentName-$environmentName-$(git rev-parse --short HEAD)"
     Location          = $deploymentConfig.location
@@ -102,7 +118,13 @@ switch ($deploymentObject.Scope) {
 
 #* Add common parameters
 $azCliCommand += "--name $($deploymentObject.Name)"
-$azCliCommand += "--parameters $($deploymentObject.ParameterFile)"
+
+if ($deploymentObject.ParameterFile) {
+    $azCliCommand += "--parameters $($deploymentObject.ParameterFile)"
+}
+else {
+    $azCliCommand += "--template-file $($deploymentObject.TemplateReference)"
+}
 
 #* Add type specific parameters
 if ($deploymentObject.Type -eq "deployment") {
