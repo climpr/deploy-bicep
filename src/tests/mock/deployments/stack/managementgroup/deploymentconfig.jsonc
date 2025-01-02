@@ -1,7 +1,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/climpr/climpr-schemas/main/schemas/v1.0.0/bicep-deployment/deploymentconfig.json#",
-  "type": "stack",
+  "type": "deploymentStack",
   "name": "default-stack",
-  "actionOnUnmanage": "deleteAll",
-  "denySettingsMode": "denyDelete"
+  "actionOnUnmanage": {
+    "resources": "delete",
+    "resourceGroups": "delete"
+  },
+  "denySettings": {
+    "mode": "denyDelete"
+  }
 }

@@ -124,7 +124,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the deployment type is 'stack'" {
+    Context "When a deployment does not have a .bicepparam file" {
+        BeforeAll {
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep"
+        }
+
+        It "Should not throw an error" {
+            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep" } | `
+                Should -Not -Throw
+        }
+        It "The 'AzureCliCommand' property should be correct" {
+            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name no-param-default-dev-$shortHash --template-file $mockDirectory/deployments/deployment/no-param-default/dev.bicep"
+        }
+    }
+
+    Context "When the deployment type is 'deploymentStack'" {
         BeforeAll {
             $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
@@ -135,8 +149,8 @@ Describe "Resolve-DeploymentConfig.ps1" {
         It "The 'AzureCliVersion' property should be '2.59.0'" {
             $res.AzureCliVersion | Should -Be "2.59.0"
         }
-        It "The 'Type' property should be 'stack'" {
-            $res.Type | Should -Be "stack"
+        It "The 'Type' property should be 'deploymentStack'" {
+            $res.Type | Should -Be "deploymentStack"
         }
         It "The 'Scope' property should be 'subscription'" {
             $res.Scope | Should -Be "subscription"
@@ -169,10 +183,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -189,10 +208,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                     description      = $null
                 }
             }
@@ -210,10 +234,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                     description      = ""
                 }
             }
@@ -231,10 +260,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                     description      = "mock-description"
                 }
             }
@@ -252,10 +286,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -272,10 +311,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location                  = "westeurope"
-                    type                      = "stack"
+                    type                      = "deploymentStack"
                     name                      = "default-stack"
-                    actionOnUnmanage          = "deleteAll"
-                    denySettingsMode          = "denyDelete"
+                    actionOnUnmanage          = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings              = @{
+                        mode = "denyDelete"
+                    }
                     bypassStackOutOfSyncError = $null
                 }
             }
@@ -293,10 +337,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location                  = "westeurope"
-                    type                      = "stack"
+                    type                      = "deploymentStack"
                     name                      = "default-stack"
-                    actionOnUnmanage          = "deleteAll"
-                    denySettingsMode          = "denyDelete"
+                    actionOnUnmanage          = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings              = @{
+                        mode = "denyDelete"
+                    }
                     bypassStackOutOfSyncError = $false
                 }
             }
@@ -314,10 +363,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location                  = "westeurope"
-                    type                      = "stack"
+                    type                      = "deploymentStack"
                     name                      = "default-stack"
-                    actionOnUnmanage          = "deleteAll"
-                    denySettingsMode          = "denyDelete"
+                    actionOnUnmanage          = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings              = @{
+                        mode = "denyDelete"
+                    }
                     bypassStackOutOfSyncError = $true
                 }
             }
@@ -330,15 +384,20 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsApplyToChildScopes' property is unset" {
+    Context "When the stack has a 'denySettings.applyToChildScopes' property is unset" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -350,16 +409,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsApplyToChildScopes' property set to null" {
+    Context "When the stack has a 'denySettings.applyToChildScopes' property set to null" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                       = "westeurope"
-                    type                           = "stack"
-                    name                           = "default-stack"
-                    actionOnUnmanage               = "deleteAll"
-                    denySettingsMode               = "denyDelete"
-                    denySettingsApplyToChildScopes = $null
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode               = "denyDelete"
+                        applyToChildScopes = $null
+                    }
                 }
             }
 
@@ -371,16 +435,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsApplyToChildScopes' property set to false" {
+    Context "When the stack has a 'denySettings.applyToChildScopes' property set to false" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                       = "westeurope"
-                    type                           = "stack"
-                    name                           = "default-stack"
-                    actionOnUnmanage               = "deleteAll"
-                    denySettingsMode               = "denyDelete"
-                    denySettingsApplyToChildScopes = $false
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode               = "denyDelete"
+                        applyToChildScopes = $false
+                    }
                 }
             }
 
@@ -392,16 +461,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsApplyToChildScopes' property set to true" {
+    Context "When the stack has a 'denySettings.applyToChildScopes' property set to true" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                       = "westeurope"
-                    type                           = "stack"
-                    name                           = "default-stack"
-                    actionOnUnmanage               = "deleteAll"
-                    denySettingsMode               = "denyDelete"
-                    denySettingsApplyToChildScopes = $true
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode               = "denyDelete"
+                        applyToChildScopes = $true
+                    }
                 }
             }
 
@@ -409,19 +483,24 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deny-settings-apply-to-child-scopes --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-apply-to-child-scopes --description `"`" --tags `"`""
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedActions' property is unset" {
+    Context "When the stack has a 'denySettings.excludedActions' property is unset" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -433,16 +512,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedActions' property is set to null" {
+    Context "When the stack has a 'denySettings.excludedActions' property is set to null" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                    = "westeurope"
-                    type                        = "stack"
-                    name                        = "default-stack"
-                    actionOnUnmanage            = "deleteAll"
-                    denySettingsMode            = "denyDelete"
-                    denySettingsExcludedActions = $null
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode            = "denyDelete"
+                        excludedActions = $null
+                    }
                 }
             }
 
@@ -454,16 +538,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedActions' property is set to an empty array" {
+    Context "When the stack has a 'denySettings.excludedActions' property is set to an empty array" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                    = "westeurope"
-                    type                        = "stack"
-                    name                        = "default-stack"
-                    actionOnUnmanage            = "deleteAll"
-                    denySettingsMode            = "denyDelete"
-                    denySettingsExcludedActions = @()
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode            = "denyDelete"
+                        excludedActions = @()
+                    }
                 }
             }
 
@@ -471,20 +560,27 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deny-settings-excluded-actions `"`" --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-actions `"`" --description `"`" --tags `"`""
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedActions' property is set to an array with a single entry" {
+    Context "When the stack has a 'denySettings.excludedActions' property is set to an array with a single entry" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                    = "westeurope"
-                    type                        = "stack"
-                    name                        = "default-stack"
-                    actionOnUnmanage            = "deleteAll"
-                    denySettingsMode            = "denyDelete"
-                    denySettingsExcludedActions = @( "mock-action" )
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode            = "denyDelete"
+                        excludedActions = @(
+                            "mock-action"
+                        )
+                    }
                 }
             }
 
@@ -492,23 +588,28 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"mock-action`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deny-settings-excluded-actions `"mock-action`" --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-actions `"mock-action`" --description `"`" --tags `"`""
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedActions' property is set to an array with a multiple entries" {
+    Context "When the stack has a 'denySettings.excludedActions' property is set to an array with a multiple entries" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                    = "westeurope"
-                    type                        = "stack"
-                    name                        = "default-stack"
-                    actionOnUnmanage            = "deleteAll"
-                    denySettingsMode            = "denyDelete"
-                    denySettingsExcludedActions = @(
-                        "mock-action1"
-                        "mock-action2"
-                    )
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode            = "denyDelete"
+                        excludedActions = @(
+                            "mock-action1"
+                            "mock-action2"
+                        )
+                    }
                 }
             }
 
@@ -516,19 +617,24 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"mock-action1`" `"mock-action2`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deny-settings-excluded-actions `"mock-action1`" `"mock-action2`" --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-actions `"mock-action1`" `"mock-action2`" --description `"`" --tags `"`""
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedPrincipals' property is unset" {
+    Context "When the stack has a 'denySettings.excludedPrincipals' property is unset" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -540,16 +646,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedPrincipals' property is set to null" {
+    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to null" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                       = "westeurope"
-                    type                           = "stack"
-                    name                           = "default-stack"
-                    actionOnUnmanage               = "deleteAll"
-                    denySettingsMode               = "denyDelete"
-                    denySettingsExcludedPrincipals = $null
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode               = "denyDelete"
+                        excludedPrincipals = $null
+                    }
                 }
             }
 
@@ -561,16 +672,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedPrincipals' property is set to an empty array" {
+    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to an empty array" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                       = "westeurope"
-                    type                           = "stack"
-                    name                           = "default-stack"
-                    actionOnUnmanage               = "deleteAll"
-                    denySettingsMode               = "denyDelete"
-                    denySettingsExcludedPrincipals = @()
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode               = "denyDelete"
+                        excludedPrincipals = @()
+                    }
                 }
             }
 
@@ -578,44 +694,56 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deny-settings-excluded-principals `"`" --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-principals `"`" --description `"`" --tags `"`""
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedPrincipals' property is set to an array with a single entry" {
+    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to an array with a single entry" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                       = "westeurope"
-                    type                           = "stack"
-                    name                           = "default-stack"
-                    actionOnUnmanage               = "deleteAll"
-                    denySettingsMode               = "denyDelete"
-                    denySettingsExcludedPrincipals = @( "mock-action" )
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode               = "denyDelete"
+                        excludedPrincipals = @(
+                            "mock-principal"
+                        )
+                    }
                 }
             }
 
             $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"mock-action`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deny-settings-excluded-principals `"mock-action`" --tags `"`""
+        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"mock-principal`"' parameter" {
+            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-principals `"mock-principal`" --description `"`" --tags `"`""
         }
     }
 
-    Context "When the stack has a 'denySettingsExcludedPrincipals' property is set to an array with a multiple entries" {
+    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to an array with a multiple entries" {
         BeforeAll {
             Mock Get-DeploymentConfig {
                 return @{
-                    location                       = "westeurope"
-                    type                           = "stack"
-                    name                           = "default-stack"
-                    actionOnUnmanage               = "deleteAll"
-                    denySettingsMode               = "denyDelete"
-                    denySettingsExcludedPrincipals = @(
-                        "mock-principal1"
-                        "mock-principal2"
-                    )
+                    location         = "westeurope"
+                    type             = "deploymentStack"
+                    name             = "default-stack"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode               = "denyDelete"
+                        excludedPrincipals = @(
+                            "mock-principal1"
+                            "mock-principal2"
+                        )
+                    }
                 }
             }
 
@@ -623,7 +751,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"mock-principal1`" `"mock-principal2`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deny-settings-excluded-principals `"mock-principal1`" `"mock-principal2`" --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-principals `"mock-principal1`" `"mock-principal2`" --description `"`" --tags `"`""
         }
     }
 
@@ -632,10 +760,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -652,10 +785,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                     tags             = @{}
                 }
             }
@@ -673,10 +811,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                     tags             = @{
                         "key" = "value"
                     }
@@ -696,10 +839,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                     tags             = [ordered]@{
                         "key1" = "value1"
                         "key2" = "value2"
@@ -720,10 +868,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location         = "westeurope"
-                    type             = "stack"
+                    type             = "deploymentStack"
                     name             = "default-stack"
-                    actionOnUnmanage = "deleteAll"
-                    denySettingsMode = "denyDelete"
+                    actionOnUnmanage = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings     = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -740,10 +893,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
             Mock Get-DeploymentConfig {
                 return @{
                     location                = "westeurope"
-                    type                    = "stack"
+                    type                    = "deploymentStack"
                     name                    = "default-stack"
-                    actionOnUnmanage        = "deleteAll"
-                    denySettingsMode        = "denyDelete"
+                    actionOnUnmanage        = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings            = @{
+                        mode = "denyDelete"
+                    }
                     deploymentResourceGroup = "mock-rg"
                 }
             }
@@ -762,10 +920,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 return @{
                     location          = "westeurope"
                     managementGroupId = "mock-managementgroup-id"
-                    type              = "stack"
+                    type              = "deploymentStack"
                     name              = "default-stack"
-                    actionOnUnmanage  = "deleteAll"
-                    denySettingsMode  = "denyDelete"
+                    actionOnUnmanage  = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings      = @{
+                        mode = "denyDelete"
+                    }
                 }
             }
 
@@ -773,7 +936,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should not include the '--deployment-resource-group' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack mg create --location westeurope --management-group-id mock-managementgroup-id --name default-stack --parameters $mockDirectory/deployments/stack/managementgroup/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack mg create --location westeurope --management-group-id mock-managementgroup-id --name default-stack --parameters $mockDirectory/deployments/stack/managementgroup/dev.bicepparam --yes --action-on-unmanage deleteResources --deny-settings-mode denyDelete --description `"`" --tags `"`""
         }
     }
 
@@ -783,10 +946,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 return @{
                     location               = "westeurope"
                     managementGroupId      = "mock-managementgroup-id"
-                    type                   = "stack"
+                    type                   = "deploymentStack"
                     name                   = "default-stack"
-                    actionOnUnmanage       = "deleteAll"
-                    denySettingsMode       = "denyDelete"
+                    actionOnUnmanage       = @{
+                        resources      = "delete"
+                        resourceGroups = "delete"
+                    }
+                    denySettings           = @{
+                        mode = "denyDelete"
+                    }
                     deploymentSubscription = "mock-sub"
                 }
             }
@@ -795,7 +963,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
 
         It "The 'AzureCliCommand' property should include the '--deployment-subscription' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack mg create --location westeurope --management-group-id mock-managementgroup-id --name default-stack --parameters $mockDirectory/deployments/stack/managementgroup/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deployment-subscription mock-sub --tags `"`""
+            $res.AzureCliCommand | Should -Be "az stack mg create --location westeurope --management-group-id mock-managementgroup-id --name default-stack --parameters $mockDirectory/deployments/stack/managementgroup/dev.bicepparam --yes --action-on-unmanage deleteResources --deny-settings-mode denyDelete --description `"`" --deployment-subscription mock-sub --tags `"`""
         }
     }
 }
