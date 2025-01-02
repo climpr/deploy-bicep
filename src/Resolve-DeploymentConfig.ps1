@@ -76,22 +76,35 @@ $deploymentObject = [pscustomobject]@{
 }
 
 $azCliCommand = @()
+$deploymentType = switch ($deploymentObject.Type) {
+    "deployment" {
+        "deployment"
+    }
+    "deploymentStack" {
+        "stack"
+    }
+    default {
+        Write-Output "::error::Unknown deployment type."
+        throw "Unknown deployment type."
+    }
+}
+
 switch ($deploymentObject.Scope) {
     "resourceGroup" {
-        $azCliCommand += "az $($deploymentObject.Type) group create"
+        $azCliCommand += "az $deploymentType group create"
         $azCliCommand += "--resource-group $($deploymentObject.ResourceGroupName)"
     }
     "subscription" { 
-        $azCliCommand += "az $($deploymentObject.Type) sub create"
+        $azCliCommand += "az $deploymentType sub create"
         $azCliCommand += "--location $($deploymentObject.Location)"
     }
     "managementGroup" {
-        $azCliCommand += "az $($deploymentObject.Type) mg create"
+        $azCliCommand += "az $deploymentType mg create"
         $azCliCommand += "--location $($deploymentObject.Location)"
         $azCliCommand += "--management-group-id $($deploymentObject.ManagementGroupId)"
     }
     "tenant" {
-        $azCliCommand += "az $($deploymentObject.Type) tenant create"
+        $azCliCommand += "az $deploymentType tenant create"
         $azCliCommand += "--location $($deploymentObject.Location)" 
     }
     default {
@@ -110,10 +123,66 @@ if ($deploymentObject.Type -eq "deployment") {
         $azCliCommand += "--what-if"
     }
 }
-elseif ($deploymentObject.Type -eq "stack") {
+elseif ($deploymentObject.Type -eq "deploymentStack") {
     $azCliCommand += "--yes"
-    $azCliCommand += "--action-on-unmanage $($deploymentConfig.actionOnUnmanage)"
-    $azCliCommand += "--deny-settings-mode $($deploymentConfig.denySettingsMode)"
+
+    if ($null -ne $deploymentConfig.actionOnUnmanage) {
+        if ($deploymentObject.Scope -eq "managementGroup") {
+            if ($deploymentConfig.actionOnUnmanage.resources -eq "delete" -and $deploymentConfig.actionOnUnmanage.resourceGroups -eq "delete" -and $deploymentConfig.actionOnUnmanage.managementGroups -eq "delete") {
+                $azCliCommand += "--action-on-unmanage deleteAll"
+            }
+            elseif ($deploymentConfig.actionOnUnmanage.resources -eq "delete") {
+                $azCliCommand += "--action-on-unmanage deleteResources"
+            }
+            else {
+                $azCliCommand += "--action-on-unmanage detachAll"
+            }
+        }
+        else {
+            if ($deploymentConfig.actionOnUnmanage.resources -eq "delete" -and $deploymentConfig.actionOnUnmanage.resourceGroups -eq "delete") {
+                $azCliCommand += "--action-on-unmanage deleteAll"
+            }
+            elseif ($deploymentConfig.actionOnUnmanage.resources -eq "delete") {
+                $azCliCommand += "--action-on-unmanage deleteResources"
+            }
+            else {
+                $azCliCommand += "--action-on-unmanage detachAll"
+            }
+        }
+    }
+    else {
+        $azCliCommand += "--action-on-unmanage detachAll"
+    }
+
+    if ($null -ne $deploymentConfig.denySettings) {
+        $azCliCommand += "--deny-settings-mode $($deploymentConfig.denySettings.mode)"
+
+        if ($deploymentConfig.denySettings.applyToChildScopes -eq $true) {
+            $azCliCommand += "--deny-settings-apply-to-child-scopes"
+        }
+        if ($null -ne $deploymentConfig.denySettings.excludedActions) {
+            $azCliExcludedActions = ($deploymentConfig.denySettings.excludedActions | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
+            if ($azCliExcludedActions.Length -eq 0) {
+                $azCliCommand += '--deny-settings-excluded-actions ""'
+            }
+            else {
+                $azCliCommand += "--deny-settings-excluded-actions $azCliExcludedActions"
+            }
+        }
+        if ($null -ne $deploymentConfig.denySettings.excludedPrincipals) {
+            $azCliExcludedPrincipals = ($deploymentConfig.denySettings.excludedPrincipals | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
+            if ($azCliExcludedPrincipals.Length -eq 0) {
+                $azCliCommand += '--deny-settings-excluded-principals ""'
+            }
+            else {
+                $azCliCommand += "--deny-settings-excluded-principals $azCliExcludedPrincipals"
+            }
+        }
+    }
+    else {
+        $azCliCommand += "--deny-settings-mode none"
+    }
+
     if ([string]::IsNullOrEmpty($deploymentObject.description)) {
         $azCliCommand += '--description ""'
     }
@@ -128,27 +197,6 @@ elseif ($deploymentObject.Type -eq "stack") {
     }
     if ($deploymentConfig.bypassStackOutOfSyncError -eq $true) {
         $azCliCommand += "--bypass-stack-out-of-sync-error"
-    }
-    if ($deploymentConfig.denySettingsApplyToChildScopes -eq $true) {
-        $azCliCommand += "--deny-settings-apply-to-child-scopes"
-    }
-    if ($null -ne $deploymentConfig.denySettingsExcludedActions) {
-        $azCliExcludedActions = ($deploymentConfig.denySettingsExcludedActions | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
-        if ($azCliExcludedActions.Length -eq 0) {
-            $azCliCommand += '--deny-settings-excluded-actions ""'
-        }
-        else {
-            $azCliCommand += "--deny-settings-excluded-actions $azCliExcludedActions"
-        }
-    }
-    if ($null -ne $deploymentConfig.denySettingsExcludedPrincipals) {
-        $azCliExcludedPrincipals = ($deploymentConfig.denySettingsExcludedPrincipals | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
-        if ($azCliExcludedPrincipals.Length -eq 0) {
-            $azCliCommand += '--deny-settings-excluded-principals ""'
-        }
-        else {
-            $azCliCommand += "--deny-settings-excluded-principals $azCliExcludedPrincipals"
-        }
     }
     if ($null -ne $deploymentConfig.tags -and $deploymentConfig.tags.Count -ge 1) {
         $azCliTags = ($deploymentConfig.tags.Keys | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join " "
