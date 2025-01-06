@@ -91,6 +91,12 @@ $deploymentObject = [pscustomobject]@{
     ResourceGroupName = $deploymentConfig.resourceGroupName
 }
 
+#* Throw an error if a the deployment is with scope 'tenant' and type 'deploymentStack' as this is not supported.
+if ($deploymentObject.Type -eq 'deploymentStack' -and $deploymentObject.Scope -eq 'tenant') {
+    Write-Output "::error::Deployment stacks are not supported for tenant scoped deployments."
+    throw "Deployment stacks are not supported for tenant scoped deployments."
+}
+
 $azCliCommand = @()
 $deploymentType = switch ($deploymentObject.Type) {
     "deployment" {
