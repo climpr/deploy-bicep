@@ -1,18 +1,19 @@
 BeforeAll {
-    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-    Install-Module Bicep -MinimumVersion "2.5.0"
+    if ((Get-PSResourceRepository -Name PSGallery).Trusted -eq $false) {
+        Set-PSResourceRepository -Name PSGallery -Trusted -Confirm:$false
+    }
+    if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.7.0") {
+        Install-PSResource -Name Bicep
+    }
     Import-Module $PSScriptRoot/../support-functions.psm1 -Force
+    $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
 }
 
 Describe "Resolve-TemplateDeploymentScope.ps1" {
-    BeforeAll {
-        $script:mockDirectory = "$PSScriptRoot/mock"
-    }
-
     Context "When targetScope-keyword in template is not on line 1" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/workload-local-comments/targetScopeLine2.bicepparam"
+                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam"
                 DeploymentConfig  = @{}
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
@@ -26,7 +27,7 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
     Context "When using-keyword in parameterfile is not on line 1" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/workload-local-comments/usingLine2.bicepparam"
+                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/usingLine2.bicepparam"
                 DeploymentConfig  = @{ 'managementGroupId' = 'mockMgmtGroupId' }
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
@@ -40,7 +41,7 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
     Context "When using-keyword is commented before the actual using-keyword" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/workload-local-comments/usingCommented.bicepparam"
+                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/usingCommented.bicepparam"
                 DeploymentConfig  = @{
                     'managementGroupId' = 'mockMgmtGroupId'
                     'resourceGroupName' = 'mockResourceGroupName'
@@ -57,7 +58,7 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
     Context "When scope-keyword is commented before the actual scope-keyword" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/workload-local-comments/targetScopeCommented.bicepparam"
+                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
                 DeploymentConfig  = @{ 'managementGroupId' = 'mockMgmtGroupId' }
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
