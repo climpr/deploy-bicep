@@ -1,17 +1,17 @@
 BeforeAll {
-    Import-Module $PSScriptRoot/../support-functions.psm1
+    Import-Module $PSScriptRoot/../support-functions.psm1 -Force
     $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
     $script:commonParam = @{
         DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
     }
 }
 
-Describe "Resolve-DeploymentConfig.ps1" {
+Describe "Get-DeploymentConfig.ps1" {
     Context "With .json deploymentconfig file" {
         BeforeAll {
             $script:param = @{
                 DeploymentDirectoryPath = "$mockDirectory/deployments/deployment-config/json"
-                ParameterFileName       = "dev.bicepparam"
+                DeploymentFileName      = "dev.bicepparam"
             }
 
             $script:res = Get-DeploymentConfig @commonParam @param
@@ -26,7 +26,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         BeforeAll {
             $script:param = @{
                 DeploymentDirectoryPath = "$mockDirectory/deployments/deployment-config/jsonc"
-                ParameterFileName       = "dev.bicepparam"
+                DeploymentFileName      = "dev.bicepparam"
             }
 
             $script:res = Get-DeploymentConfig @commonParam @param
@@ -41,7 +41,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         BeforeAll {
             $script:param = @{
                 DeploymentDirectoryPath = "$mockDirectory/deployments/deployment-config/conflict"
-                ParameterFileName       = "dev.bicepparam"
+                DeploymentFileName      = "dev.bicepparam"
             }
         }
 
@@ -54,7 +54,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         BeforeAll {
             $script:param = @{
                 DeploymentDirectoryPath = "$mockDirectory/deployments/deployment-config/default"
-                ParameterFileName       = "dev.bicepparam"
+                DeploymentFileName      = "dev.bicepparam"
             }
 
             $script:res = Get-DeploymentConfig @commonParam @param
@@ -69,7 +69,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         BeforeAll {
             $script:param = @{
                 DeploymentDirectoryPath = "$mockDirectory/deployments/deployment-config/default"
-                ParameterFileName       = "dev.bicepparam"
+                DeploymentFileName      = "dev.bicepparam"
             }
 
             $script:res = Get-DeploymentConfig @commonParam @param
@@ -84,7 +84,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
         BeforeAll {
             $script:param = @{
                 DeploymentDirectoryPath = "$mockDirectory/deployments/deployment-config/default"
-                ParameterFileName       = "dev.bicepparam"
+                DeploymentFileName      = "dev.bicepparam"
             }
 
             $script:res = Get-DeploymentConfig @commonParam @param

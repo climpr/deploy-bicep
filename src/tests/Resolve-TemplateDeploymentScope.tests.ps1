@@ -13,8 +13,8 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
     Context "When targetScope-keyword in template is not on line 1" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam"
-                DeploymentConfig  = @{}
+                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam"
+                DeploymentConfig   = @{}
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
         }
@@ -27,8 +27,8 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
     Context "When using-keyword in parameterfile is not on line 1" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/usingLine2.bicepparam"
-                DeploymentConfig  = @{ 'managementGroupId' = 'mockMgmtGroupId' }
+                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/usingLine2.bicepparam"
+                DeploymentConfig   = @{ 'managementGroupId' = 'mockMgmtGroupId' }
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
         }
@@ -41,8 +41,8 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
     Context "When using-keyword is commented before the actual using-keyword" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/usingCommented.bicepparam"
-                DeploymentConfig  = @{
+                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/usingCommented.bicepparam"
+                DeploymentConfig   = @{
                     'managementGroupId' = 'mockMgmtGroupId'
                     'resourceGroupName' = 'mockResourceGroupName'
                 }
@@ -58,8 +58,8 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
     Context "When scope-keyword is commented before the actual scope-keyword" {
         BeforeAll {
             $script:param = @{
-                ParameterFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
-                DeploymentConfig  = @{ 'managementGroupId' = 'mockMgmtGroupId' }
+                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
+                DeploymentConfig   = @{ 'managementGroupId' = 'mockMgmtGroupId' }
             }
             $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
         }

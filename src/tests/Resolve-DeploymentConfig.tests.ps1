@@ -5,7 +5,7 @@ BeforeAll {
     if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.7.0") {
         Install-PSResource -Name Bicep
     }
-    Import-Module $PSScriptRoot/../support-functions.psm1
+    Import-Module $PSScriptRoot/../support-functions.psm1 -Force
     $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
     $script:commonParam = @{
         Quiet                       = $true
@@ -19,7 +19,7 @@ BeforeAll {
 Describe "Resolve-DeploymentConfig.ps1" {
     Context "When the deployment type is 'deployment'" {
         BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/default/dev.bicepparam"
         }
 
         It "The 'Deploy' property should be 'true'" {
@@ -59,7 +59,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
     Context "When a deployment uses a local template" {
         BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/local-template/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/local-template/dev.bicepparam"
         }
 
         It "The 'TemplateReference' property should be 'main.bicep'" {
@@ -72,7 +72,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
     Context "When a deployment uses a remote template" {
         BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/remote-template/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/remote-template/dev.bicepparam"
         }
 
         It "The 'TemplateReference' property should be 'br/public:avm/res/resources/resource-group:0.2.3'" {
@@ -85,7 +85,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
     Context "When a deployment uses a template with local modules" {
         BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/local-modules/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/local-modules/dev.bicepparam"
         }
 
         It "The 'TemplateReference' property should be 'main.bicep'" {
@@ -98,11 +98,11 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
     Context "When a deployment uses a template with remote modules" {
         BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/remote-modules/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/remote-modules/dev.bicepparam"
         }
 
         It "Should not throw an error" {
-            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/deployment/remote-modules/dev.bicepparam" } | `
+            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/remote-modules/dev.bicepparam" } | `
                 Should -Not -Throw
         }
         It "The 'AzureCliCommand' property should be correct" {
@@ -110,9 +110,37 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
+    Context "When a deployment does not have a .bicepparam file" {
+        BeforeAll {
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep"
+        }
+
+        It "Should not throw an error" {
+            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep" } | `
+                Should -Not -Throw
+        }
+        It "The 'AzureCliCommand' property should be correct" {
+            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name no-param-default-dev-$shortHash --template-file $mockDirectory/deployments/deployment/no-param-default/dev.bicep"
+        }
+    }
+
+    Context "When a deployment does not have a .bicepparam file" {
+        BeforeAll {
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep"
+        }
+
+        It "Should not throw an error" {
+            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep" } | `
+                Should -Not -Throw
+        }
+        It "The 'AzureCliCommand' property should be correct" {
+            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name no-param-default-dev-$shortHash --template-file $mockDirectory/deployments/deployment/no-param-default/dev.bicep"
+        }
+    }
+
     Context "When the deployment type is 'deploymentStack'" {
         BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'Deploy' property should be 'true'" {
@@ -167,7 +195,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
@@ -193,7 +221,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
@@ -219,7 +247,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
@@ -245,7 +273,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
@@ -270,7 +298,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -296,7 +324,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -322,7 +350,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -348,7 +376,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -373,7 +401,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -399,7 +427,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -425,7 +453,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -451,7 +479,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
@@ -476,7 +504,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-actions `"`"' parameter" {
@@ -502,7 +530,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-actions `"`"' parameter" {
@@ -528,7 +556,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"`"' parameter" {
@@ -556,7 +584,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"mock-action`"' parameter" {
@@ -585,7 +613,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"mock-action1`" `"mock-action2`"' parameter" {
@@ -610,7 +638,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-principals `"`"' parameter" {
@@ -636,7 +664,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-principals `"`"' parameter" {
@@ -662,7 +690,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"`"' parameter" {
@@ -690,7 +718,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"mock-principal`"' parameter" {
@@ -719,7 +747,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"mock-principal1`" `"mock-principal2`"' parameter" {
@@ -744,7 +772,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the correct tags syntax" {
@@ -770,7 +798,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the correct tags syntax" {
@@ -798,7 +826,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the correct tags syntax" {
@@ -827,7 +855,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the correct tags syntax" {
@@ -852,7 +880,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--deployment-resource-group' parameter" {
@@ -878,7 +906,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deployment-resource-group' parameter" {
@@ -904,7 +932,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/managementgroup/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/managementgroup/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should not include the '--deployment-resource-group' parameter" {
@@ -931,7 +959,7 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -ParameterFilePath "$mockDirectory/deployments/stack/managementgroup/dev.bicepparam"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/managementgroup/dev.bicepparam"
         }
 
         It "The 'AzureCliCommand' property should include the '--deployment-subscription' parameter" {
