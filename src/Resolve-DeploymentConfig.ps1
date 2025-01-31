@@ -91,147 +91,207 @@ $deploymentObject = [pscustomobject]@{
     ResourceGroupName = $deploymentConfig.resourceGroupName
 }
 
-#* Throw an error if a the deployment is with scope 'tenant' and type 'deploymentStack' as this is not supported.
-if ($deploymentObject.Type -eq 'deploymentStack' -and $deploymentObject.Scope -eq 'tenant') {
-    Write-Output "::error::Deployment stacks are not supported for tenant scoped deployments."
-    throw "Deployment stacks are not supported for tenant scoped deployments."
-}
-
+#* Create deployment command
 $azCliCommand = @()
-$deploymentType = switch ($deploymentObject.Type) {
+switch ($deploymentObject.Type) {
     "deployment" {
-        "deployment"
-    }
-    "deploymentStack" {
-        "stack"
-    }
-    default {
-        Write-Output "::error::Unknown deployment type."
-        throw "Unknown deployment type."
-    }
-}
-
-switch ($deploymentObject.Scope) {
-    "resourceGroup" {
-        $azCliCommand += "az $deploymentType group create"
-        $azCliCommand += "--resource-group $($deploymentObject.ResourceGroupName)"
-    }
-    "subscription" { 
-        $azCliCommand += "az $deploymentType sub create"
-        $azCliCommand += "--location $($deploymentObject.Location)"
-    }
-    "managementGroup" {
-        $azCliCommand += "az $deploymentType mg create"
-        $azCliCommand += "--location $($deploymentObject.Location)"
-        $azCliCommand += "--management-group-id $($deploymentObject.ManagementGroupId)"
-    }
-    "tenant" {
-        $azCliCommand += "az $deploymentType tenant create"
-        $azCliCommand += "--location $($deploymentObject.Location)" 
-    }
-    default {
-        Write-Output "::error::Unknown deployment scope."
-        throw "Unknown deployment scope."
-    }
-}
-
-#* Add common parameters
-$azCliCommand += "--name $($deploymentObject.Name)"
-
-if ($deploymentObject.ParameterFile) {
-    $azCliCommand += "--parameters $($deploymentObject.ParameterFile)"
-}
-else {
-    $azCliCommand += "--template-file $($deploymentObject.TemplateReference)"
-}
-
-#* Add type specific parameters
-if ($deploymentObject.Type -eq "deployment") {
-    if ($DeploymentWhatIf) {
-        $azCliCommand += "--what-if"
-    }
-}
-elseif ($deploymentObject.Type -eq "deploymentStack") {
-    $azCliCommand += "--yes"
-
-    if ($null -ne $deploymentConfig.actionOnUnmanage) {
-        if ($deploymentObject.Scope -eq "managementGroup") {
-            if ($deploymentConfig.actionOnUnmanage.resources -eq "delete" -and $deploymentConfig.actionOnUnmanage.resourceGroups -eq "delete" -and $deploymentConfig.actionOnUnmanage.managementGroups -eq "delete") {
-                $azCliCommand += "--action-on-unmanage deleteAll"
+        #* Create base command
+        switch ($deploymentObject.Scope) {
+            "resourceGroup" {
+                $azCliCommand += "az deployment group create"
+                $azCliCommand += "--resource-group $($deploymentObject.ResourceGroupName)"
+                $azCliCommand += "--name $($deploymentObject.Name)"
             }
-            elseif ($deploymentConfig.actionOnUnmanage.resources -eq "delete") {
-                $azCliCommand += "--action-on-unmanage deleteResources"
+            "subscription" { 
+                $azCliCommand += "az deployment sub create"
+                $azCliCommand += "--location $($deploymentObject.Location)"
+                $azCliCommand += "--name $($deploymentObject.Name)"
+            }
+            "managementGroup" {
+                $azCliCommand += "az deploymente mg create"
+                $azCliCommand += "--location $($deploymentObject.Location)"
+                $azCliCommand += "--management-group-id $($deploymentObject.ManagementGroupId)"
+                $azCliCommand += "--name $($deploymentObject.Name)"
+            }
+            "tenant" {
+                $azCliCommand += "az deployment tenant create"
+                $azCliCommand += "--location $($deploymentObject.Location)"
+                $azCliCommand += "--name $($deploymentObject.Name)"
+            }
+            default {
+                Write-Output "::error::Unknown deployment scope."
+                throw "Unknown deployment scope."
+            }
+        }
+        
+        #* Add template reference parameter
+        if ($deploymentObject.ParameterFile) {
+            $azCliCommand += "--parameters $($deploymentObject.ParameterFile)"
+        }
+        else {
+            $azCliCommand += "--template-file $($deploymentObject.TemplateReference)"
+        }
+    
+        if ($DeploymentWhatIf) {
+            $azCliCommand += "--what-if"
+        }
+    }
+
+    "deploymentStack" {
+        #* Throw an error if a the deployment is with scope 'tenant' and type 'deploymentStack' as this is not supported.
+        if ($deploymentObject.Scope -eq 'tenant') {
+            Write-Output "::error::Deployment stacks are not supported for tenant scoped deployments."
+            throw "Deployment stacks are not supported for tenant scoped deployments."
+        }
+
+        #* Determine action for stack
+        $stackAction = "create"
+        if ($DeploymentWhatIf) {
+            $stackAction = "validate"
+        }
+
+        #* Create base command
+        switch ($deploymentObject.Scope) {
+            "resourceGroup" {
+                $azCliCommand += "az stack group $stackAction"
+                $azCliCommand += "--resource-group $($deploymentObject.ResourceGroupName)"
+                $azCliCommand += "--name $($deploymentObject.Name)"
+            }
+            "subscription" { 
+                $azCliCommand += "az stack sub $stackAction"
+                $azCliCommand += "--location $($deploymentObject.Location)"
+                $azCliCommand += "--name $($deploymentObject.Name)"
+            }
+            "managementGroup" {
+                $azCliCommand += "az stack mg $stackAction"
+                $azCliCommand += "--location $($deploymentObject.Location)"
+                $azCliCommand += "--management-group-id $($deploymentObject.ManagementGroupId)"
+                $azCliCommand += "--name $($deploymentObject.Name)"
+            }
+            "tenant" {
+                $azCliCommand += "az stack tenant $stackAction"
+                $azCliCommand += "--location $($deploymentObject.Location)" 
+                $azCliCommand += "--name $($deploymentObject.Name)"
+            }
+            default {
+                Write-Output "::error::Unknown deployment scope."
+                throw "Unknown deployment scope."
+            }
+        }
+
+        #* Add template reference parameter
+        if ($deploymentObject.ParameterFile) {
+            $azCliCommand += "--parameters $($deploymentObject.ParameterFile)"
+        }
+        else {
+            $azCliCommand += "--template-file $($deploymentObject.TemplateReference)"
+        }
+
+        #* Add parameter: --yes
+        if (!$DeploymentWhatIf) {
+            $azCliCommand += "--yes"
+        }
+
+        #* Add parameter: --action-on-unmanage
+        if ($null -ne $deploymentConfig.actionOnUnmanage) {
+            if ($deploymentObject.Scope -eq "managementGroup") {
+                if ($deploymentConfig.actionOnUnmanage.resources -eq "delete" -and $deploymentConfig.actionOnUnmanage.resourceGroups -eq "delete" -and $deploymentConfig.actionOnUnmanage.managementGroups -eq "delete") {
+                    $azCliCommand += "--action-on-unmanage deleteAll"
+                }
+                elseif ($deploymentConfig.actionOnUnmanage.resources -eq "delete") {
+                    $azCliCommand += "--action-on-unmanage deleteResources"
+                }
+                else {
+                    $azCliCommand += "--action-on-unmanage detachAll"
+                }
             }
             else {
-                $azCliCommand += "--action-on-unmanage detachAll"
+                if ($deploymentConfig.actionOnUnmanage.resources -eq "delete" -and $deploymentConfig.actionOnUnmanage.resourceGroups -eq "delete") {
+                    $azCliCommand += "--action-on-unmanage deleteAll"
+                }
+                elseif ($deploymentConfig.actionOnUnmanage.resources -eq "delete") {
+                    $azCliCommand += "--action-on-unmanage deleteResources"
+                }
+                else {
+                    $azCliCommand += "--action-on-unmanage detachAll"
+                }
             }
         }
         else {
-            if ($deploymentConfig.actionOnUnmanage.resources -eq "delete" -and $deploymentConfig.actionOnUnmanage.resourceGroups -eq "delete") {
-                $azCliCommand += "--action-on-unmanage deleteAll"
+            $azCliCommand += "--action-on-unmanage detachAll"
+        }
+
+        #* Add parameter: --deny-settings-mode
+        if ($null -ne $deploymentConfig.denySettings) {
+            $azCliCommand += "--deny-settings-mode $($deploymentConfig.denySettings.mode)"
+
+            #* Add parameter: --deny-settings-apply-to-child-scopes
+            if ($deploymentConfig.denySettings.applyToChildScopes -eq $true) {
+                $azCliCommand += "--deny-settings-apply-to-child-scopes"
             }
-            elseif ($deploymentConfig.actionOnUnmanage.resources -eq "delete") {
-                $azCliCommand += "--action-on-unmanage deleteResources"
+
+            #* Add parameter: --deny-settings-excluded-actions
+            if ($null -ne $deploymentConfig.denySettings.excludedActions) {
+                $azCliExcludedActions = ($deploymentConfig.denySettings.excludedActions | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
+                if ($azCliExcludedActions.Length -eq 0) {
+                    $azCliCommand += '--deny-settings-excluded-actions ""'
+                }
+                else {
+                    $azCliCommand += "--deny-settings-excluded-actions $azCliExcludedActions"
+                }
             }
-            else {
-                $azCliCommand += "--action-on-unmanage detachAll"
+
+            #* Add parameter: --deny-settings-excluded-principals
+            if ($null -ne $deploymentConfig.denySettings.excludedPrincipals) {
+                $azCliExcludedPrincipals = ($deploymentConfig.denySettings.excludedPrincipals | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
+                if ($azCliExcludedPrincipals.Length -eq 0) {
+                    $azCliCommand += '--deny-settings-excluded-principals ""'
+                }
+                else {
+                    $azCliCommand += "--deny-settings-excluded-principals $azCliExcludedPrincipals"
+                }
             }
         }
-    }
-    else {
-        $azCliCommand += "--action-on-unmanage detachAll"
+        else {
+            $azCliCommand += "--deny-settings-mode none"
+        }
+
+        #* Add parameter: --description
+        if ([string]::IsNullOrEmpty($deploymentObject.description)) {
+            $azCliCommand += '--description ""'
+        }
+        else {
+            $azCliCommand += "--description $($deploymentConfig.description)"
+        }
+
+        #* Add parameter: --deployment-resource-group
+        if ($deploymentObject.Scope -eq "subscription" -and $deploymentConfig.deploymentResourceGroup) {
+            $azCliCommand += "--deployment-resource-group $($deploymentConfig.deploymentResourceGroup)"
+        }
+
+        #* Add parameter: --deployment-subscription
+        if ($deploymentObject.Scope -eq "managementGroup" -and $deploymentConfig.deploymentSubscription) {
+            $azCliCommand += "--deployment-subscription $($deploymentConfig.deploymentSubscription)"
+        }
+
+        #* Add parameter: --bypass-stack-out-of-sync-error
+        if ($deploymentConfig.bypassStackOutOfSyncError -eq $true) {
+            $azCliCommand += "--bypass-stack-out-of-sync-error"
+        }
+
+        #* Add parameter: --tags
+        if ($null -ne $deploymentConfig.tags -and $deploymentConfig.tags.Count -ge 1) {
+            $azCliTags = ($deploymentConfig.tags.Keys | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join " "
+            $azCliCommand += "--tags $azCliTags"
+        }
+        else {
+            $azCliCommand += '--tags ""'
+        }
     }
 
-    if ($null -ne $deploymentConfig.denySettings) {
-        $azCliCommand += "--deny-settings-mode $($deploymentConfig.denySettings.mode)"
-
-        if ($deploymentConfig.denySettings.applyToChildScopes -eq $true) {
-            $azCliCommand += "--deny-settings-apply-to-child-scopes"
-        }
-        if ($null -ne $deploymentConfig.denySettings.excludedActions) {
-            $azCliExcludedActions = ($deploymentConfig.denySettings.excludedActions | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
-            if ($azCliExcludedActions.Length -eq 0) {
-                $azCliCommand += '--deny-settings-excluded-actions ""'
-            }
-            else {
-                $azCliCommand += "--deny-settings-excluded-actions $azCliExcludedActions"
-            }
-        }
-        if ($null -ne $deploymentConfig.denySettings.excludedPrincipals) {
-            $azCliExcludedPrincipals = ($deploymentConfig.denySettings.excludedPrincipals | ForEach-Object { "`"$_`"" }) -join " " ?? '""'
-            if ($azCliExcludedPrincipals.Length -eq 0) {
-                $azCliCommand += '--deny-settings-excluded-principals ""'
-            }
-            else {
-                $azCliCommand += "--deny-settings-excluded-principals $azCliExcludedPrincipals"
-            }
-        }
-    }
-    else {
-        $azCliCommand += "--deny-settings-mode none"
-    }
-
-    if ([string]::IsNullOrEmpty($deploymentObject.description)) {
-        $azCliCommand += '--description ""'
-    }
-    else {
-        $azCliCommand += "--description $($deploymentConfig.description)"
-    }
-    if ($deploymentObject.Scope -eq "subscription" -and $deploymentConfig.deploymentResourceGroup) {
-        $azCliCommand += "--deployment-resource-group $($deploymentConfig.deploymentResourceGroup)"
-    }
-    if ($deploymentObject.Scope -eq "managementGroup" -and $deploymentConfig.deploymentSubscription) {
-        $azCliCommand += "--deployment-subscription $($deploymentConfig.deploymentSubscription)"
-    }
-    if ($deploymentConfig.bypassStackOutOfSyncError -eq $true) {
-        $azCliCommand += "--bypass-stack-out-of-sync-error"
-    }
-    if ($null -ne $deploymentConfig.tags -and $deploymentConfig.tags.Count -ge 1) {
-        $azCliTags = ($deploymentConfig.tags.Keys | ForEach-Object { "'$_=$($deploymentConfig.tags[$_])'" }) -join " "
-        $azCliCommand += "--tags $azCliTags"
-    }
-    else {
-        $azCliCommand += '--tags ""'
+    default {
+        Write-Output "::error::Unknown deployment type."
+        throw "Unknown deployment type."
     }
 }
 
