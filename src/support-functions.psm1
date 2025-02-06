@@ -75,6 +75,7 @@ function Get-DeploymentConfig {
     $deploymentConfig
 }
 
+
 function Resolve-ParameterFileTarget {
     [CmdletBinding()]
     param (
@@ -91,14 +92,31 @@ function Resolve-ParameterFileTarget {
     }
     $cleanContent = ConvertTo-UncommentedBicep -Content $Content
 
-    #* Regex for finding 'using' statement in param file
-    $regex = "^(?:\s)*?using(?:\s)*?(?:')(?:\s)*(.+?)(?:['\s])+?"
+    #* Build regex pattern
+    #* Pieces of the regex for better readability
+    $rxOptionalSpace = "(?:\s*)"
+    $rxSingleQuote = "(?:')"
+    $rxUsing = "(?:using(?:\s*))"
+    $rxNone = "(none)"
+    $rxReference = "$rxSingleQuote(?:$rxOptionalSpace(.+?))$rxSingleQuote"
+
+    #* Complete regex
+    $regexReference = "^(?:$rxUsing)(?:$rxReference).*?"
+    $regexNone = "^(?:$rxUsing)(?:$rxNone).*?"
 
     $contentMatchesRegex = $null
-    $contentMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
 
+    #* Match reference
+    $contentMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regexReference
     if (!$contentMatchesRegex) {
-        throw "[Resolve-ParameterFileTarget()] Valid 'using' statement not found in parameter file content."
+
+        #* Match "none" (for extendable param files)
+        $contentMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regexNone
+
+        #* No matches
+        if (!$contentMatchesRegex) {
+            throw "[Resolve-ParameterFileTarget()] Valid 'using' statement not found in parameter file content."
+        }
     }
     
     $usingReference = $contentMatchesRegex.Matches.Groups[1].Value
