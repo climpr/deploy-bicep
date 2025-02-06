@@ -138,6 +138,16 @@ Describe "Resolve-DeploymentConfig.ps1" {
         }
     }
 
+    Context "When a deployment uses the 'DeploymentWhatIf' parameter" {
+        BeforeAll {
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/default/dev.bicepparam" -DeploymentWhatIf $true
+        }
+
+        It "The 'AzureCliCommand' property should be correct" {
+            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name default-dev-$shortHash --parameters $mockDirectory/deployments/deployment/default/dev.bicepparam --what-if"
+        }
+    }
+
     Context "When the deployment type is 'deploymentStack'" {
         BeforeAll {
             $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
@@ -964,6 +974,16 @@ Describe "Resolve-DeploymentConfig.ps1" {
 
         It "The 'AzureCliCommand' property should include the '--deployment-subscription' parameter" {
             $res.AzureCliCommand | Should -Be "az stack mg create --location westeurope --management-group-id mock-managementgroup-id --name default-stack --parameters $mockDirectory/deployments/stack/managementgroup/dev.bicepparam --yes --action-on-unmanage deleteResources --deny-settings-mode denyDelete --description `"`" --deployment-subscription mock-sub --tags `"`""
+        }
+    }
+
+    Context "When the stack uses the 'DeploymentWhatIf' parameter" {
+        BeforeAll {
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam" -DeploymentWhatIf $true
+        }
+
+        It "The 'AzureCliCommand' property should be correct" {
+            $res.AzureCliCommand | Should -Be "az stack sub validate --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
         }
     }
 }
