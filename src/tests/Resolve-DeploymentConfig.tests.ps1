@@ -25,8 +25,8 @@ Describe "Resolve-DeploymentConfig.ps1" {
         It "The 'Deploy' property should be 'true'" {
             $res.Deploy | Should -BeTrue
         }
-        It "The 'AzureCliVersion' property should be '2.59.0'" {
-            $res.AzureCliVersion | Should -Be "2.59.0"
+        It "The 'AzureCliVersion' property should be '2.68.0'" {
+            $res.AzureCliVersion | Should -Be "2.68.0"
         }
         It "The 'Type' property should be 'deployment'" {
             $res.Type | Should -Be "deployment"
