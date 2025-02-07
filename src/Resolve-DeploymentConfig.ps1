@@ -108,7 +108,7 @@ switch ($deploymentObject.Type) {
                 $azCliCommand += "--name $($deploymentObject.Name)"
             }
             "managementGroup" {
-                $azCliCommand += "az deploymente mg create"
+                $azCliCommand += "az deployment mg create"
                 $azCliCommand += "--location $($deploymentObject.Location)"
                 $azCliCommand += "--management-group-id $($deploymentObject.ManagementGroupId)"
                 $azCliCommand += "--name $($deploymentObject.Name)"
