@@ -35,6 +35,16 @@ function Get-DeploymentConfig {
         Write-Debug "[Get-DeploymentConfig()] No default deploymentconfig file specified."
     }
 
+    #* Parse ClimprConfig
+    $climprConfig = Get-ClimprConfig -DeploymentDirectoryPath $DeploymentDirectoryPath
+    $climprConfigOptions = @{}
+    if ($climprConfig.bicepDeployment -and $climprConfig.bicepDeployment.location) {
+        $climprConfigOptions.Add("location", $climprConfig.bicepDeployment.location)
+    }
+    if ($climprConfig.bicepDeployment -and $climprConfig.bicepDeployment.azureCliVersion) {
+        $climprConfigOptions.Add("azureCliVersion", $climprConfig.bicepDeployment.azureCliVersion)
+    }
+
     #* Parse most specific deploymentconfig file
     $fileNames = @(
         $DeploymentFileName -replace "\.(bicep|bicepparam)$", ".deploymentconfig.json"
@@ -69,7 +79,9 @@ function Get-DeploymentConfig {
         }
     }
     
-    $deploymentConfig = Join-HashTable -Hashtable1 $defaultDeploymentConfig -Hashtable2 $config
+    #* Merge configurations
+    $deploymentConfig = Join-HashTable -Hashtable1 $defaultDeploymentConfig -Hashtable2 $climprConfigOptions
+    $deploymentConfig = Join-HashTable -Hashtable1 $deploymentConfig -Hashtable2 $config
 
     #* Return config object
     $deploymentConfig
@@ -310,4 +322,44 @@ function ConvertTo-UncommentedBicep {
 
     #* Return
     $contentArray
+}
+
+function Get-ClimprConfig {
+    [CmdletBinding()]
+    param (
+        # Specifies the deployment directory path as a mandatory parameter
+        [Parameter(Mandatory)]
+        [ValidateScript({ Test-Path $_ -PathType Container })] # Ensures the path exists and is a directory
+        [string]$DeploymentDirectoryPath
+    )
+
+    # Stack to store paths of found climpr configuration files
+    $configPaths = [System.Collections.Generic.Stack[string]]::new()
+    
+    # Traverse up the directory tree without changing the working directory
+    $currentPath = Get-Item -Path $DeploymentDirectoryPath
+    while ($currentPath -and ($currentPath.FullName -ne [System.IO.Path]::GetPathRoot($currentPath.FullName))) {
+        foreach ($file in @("climprconfig.jsonc", "climprconfig.json")) {
+            $filePath = Join-Path -Path $currentPath.FullName -ChildPath $file
+            if (Test-Path $filePath) {
+                $configPaths.Push($filePath)
+                break # Skip .json file if .jsonc file is found
+            }
+        }
+        $currentPath = $currentPath.Parent
+    }
+
+    # Merge configuration files
+    $mergedConfig = @{}
+    foreach ($path in $configPaths) {
+        try {
+            $config = Get-Content -Path $path -ErrorAction Stop | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+            $mergedConfig = Join-HashTable -Hashtable1 $mergedConfig -Hashtable2 $config
+        }
+        catch {
+            Write-Warning "Skipping invalid JSON file: $path"
+        }
+    }
+
+    return $mergedConfig
 }
