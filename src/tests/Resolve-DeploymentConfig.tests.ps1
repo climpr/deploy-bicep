@@ -986,4 +986,19 @@ Describe "Resolve-DeploymentConfig.ps1" {
             $res.AzureCliCommand | Should -Be "az stack sub validate --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
         }
     }
+
+    Context "When a climprconfig.jsonc file is specified" {
+        BeforeAll {
+            '{ "bicepDeployment": { "location": "swedencentral" } }' | Out-File "$mockDirectory/deployments/deployment/climprconfig.jsonc"
+            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/default/dev.bicepparam"
+        }
+
+        AfterAll {
+            Remove-Item -Path "$mockDirectory/deployments/deployment/climprconfig.jsonc" -Force -Confirm:$false -ErrorAction SilentlyContinue
+        }
+
+        It "The 'AzureCliCommand' property should be correct" {
+            $res.AzureCliCommand | Should -Be "az deployment sub create --location swedencentral --name default-dev-$($script:shortHash) --parameters $mockDirectory/deployments/deployment/default/dev.bicepparam"
+        }
+    }
 }
