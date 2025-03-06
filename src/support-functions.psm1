@@ -87,7 +87,6 @@ function Get-DeploymentConfig {
     $deploymentConfig
 }
 
-
 function Resolve-ParameterFileTarget {
     [CmdletBinding()]
     param (
@@ -100,9 +99,9 @@ function Resolve-ParameterFileTarget {
     )
 
     if ($Path) {
-        $Content = Get-Content -Path $Path
+        $Content = Get-Content -Path $Path -Raw
     }
-    $cleanContent = ConvertTo-UncommentedBicep -Content $Content
+    $cleanContent = Remove-BicepComments -Content $Content
 
     #* Build regex pattern
     #* Pieces of the regex for better readability
@@ -239,8 +238,8 @@ function Resolve-TemplateDeploymentScope {
         Push-Location -Path $deploymentFile.Directory.FullName
         
         #* Regex for finding 'targetScope' statement in template file
-        $content = Get-Content -Path $referenceString
-        $cleanContent = ConvertTo-UncommentedBicep -Content $content
+        $content = Get-Content -Path $referenceString -Raw
+        $cleanContent = Remove-BicepComments -Content $content
         $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
         $templateMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
 
@@ -319,27 +318,37 @@ function Join-HashTable {
     return $Hashtable2
 }
 
-function ConvertTo-UncommentedBicep {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        $Content
-    )
+function Remove-BicepComments {
+    param ([string]$Content)
     
-    #* Convert to single string
-    $rawContent = $Content -join [System.Environment]::NewLine
-
-    #* Remove block comments
-    $rawContent = $rawContent -replace '/\*[\s\S]*?\*/', ''
-
-    #* Remove single-line comments
-    $rawContent = $rawContent -replace '//.*', ''
-
-    #* Convert to array of strings
-    $contentArray = $rawContent -split [System.Environment]::NewLine
-
-    #* Return
-    $contentArray
+    # Preserve strings before removing comments
+    $stringPattern = "'([^']*)'"
+    $strings = @{}
+    $Content = $Content -replace $stringPattern, {
+        $key = "__STRING$($strings.Count)__"
+        $strings[$key] = $_
+        return $key
+    }
+    
+    # Remove comments
+    $Content = $Content -replace "//.*", ""  # Single-line comments
+    $Content = $Content -replace "/\*([\s\S]*?)\*/", ""  # Multi-line comments
+    
+    # Restore strings
+    foreach ($key in $strings.Keys) {
+        $Content = $Content -replace [regex]::Escape($key), $strings[$key]
+    }
+    
+    # Trim leading/trailing whitespace for each line
+    $Content = ($Content -split "`r?`n" | ForEach-Object { $_.Trim() }) -join "`n"
+    
+    # Replace multiple blank lines with a single blank line outside of strings
+    $Content = $Content -replace "(\n{2,})", "`n"
+    
+    # Remove leading and trailing blank lines
+    $Content = $Content -replace "^(\n)+|(\n)+$", ""
+    
+    return $Content
 }
 
 function Get-ClimprConfig {
