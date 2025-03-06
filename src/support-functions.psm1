@@ -105,35 +105,31 @@ function Resolve-ParameterFileTarget {
 
     #* Build regex pattern
     #* Pieces of the regex for better readability
+    $rxMultiline = "(?sm)"
     $rxOptionalSpace = "(?:\s*)"
     $rxSingleQuote = "(?:')"
-    $rxUsing = "(?:using(?:\s*))"
+    $rxUsing = "(?:using)"
     $rxNone = "(none)"
-    $rxReference = "$rxSingleQuote(?:$rxOptionalSpace(.+?))$rxSingleQuote"
+    $rxReference = "(?:$($rxSingleQuote)(?:$($rxOptionalSpace)(.+?))$($rxSingleQuote))"
 
     #* Complete regex
-    $regexReference = "^(?:$rxUsing)(?:$rxReference).*?"
-    $regexNone = "^(?:$rxUsing)(?:$rxNone).*?"
+    #* Normal bicepparam files
+    # (?sm)^(?:\s*)(?:using)(?:\s*)(?:(?:')(?:(?:\s*)(.+?))(?:')).*?
+    $regexReference = "$($rxMultiline)^$($rxOptionalSpace)$($rxUsing)$($rxOptionalSpace)$($rxReference).*?"
 
-    $contentMatchesRegex = $null
+    #* Extendable bicepparam files
+    # (?sm)^(?:\s*)(?:using)(?:\s*)(none).*?
+    $regexNone = "$($rxMultiline)^$($rxOptionalSpace)$($rxUsing)$($rxOptionalSpace)$($rxNone).*?"
 
-    #* Match reference
-    $contentMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regexReference
-    if (!$contentMatchesRegex) {
-
-        #* Match "none" (for extendable param files)
-        $contentMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regexNone
-
-        #* No matches
-        if (!$contentMatchesRegex) {
-            throw "[Resolve-ParameterFileTarget()] Valid 'using' statement not found in parameter file content."
-        }
+    if ($cleanContent -match $regexReference -or $cleanContent -match $regexNone) {
+        $usingReference = $Matches[1]
+        Write-Debug "[Resolve-ParameterFileTarget()] Valid 'using' statement found in parameter file content."
+        Write-Debug "[Resolve-ParameterFileTarget()] Resolved: '$usingReference'"
+    }
+    else {
+        throw "[Resolve-ParameterFileTarget()] Valid 'using' statement not found in parameter file content."
     }
     
-    $usingReference = $contentMatchesRegex.Matches.Groups[1].Value
-    Write-Debug "[Resolve-ParameterFileTarget()] Valid 'using' statement found in parameter file content."
-    Write-Debug "[Resolve-ParameterFileTarget()] Resolved: '$usingReference'"
-
     return $usingReference
 }
 
@@ -237,20 +233,40 @@ function Resolve-TemplateDeploymentScope {
         #* Is local template
         Push-Location -Path $deploymentFile.Directory.FullName
         
-        #* Regex for finding 'targetScope' statement in template file
+        #* Get template content
         $content = Get-Content -Path $referenceString -Raw
-        $cleanContent = Remove-BicepComments -Content $content
-        $regex = "^(?:\s)*?targetScope(?:\s)*?=(?:\s)*?(?:['\s])+?(resourceGroup|subscription|managementGroup|tenant)(?:['\s])+?"
-        $templateMatchesRegex = $cleanContent | Select-String -AllMatches -Pattern $regex
-
         Pop-Location
+        
+        #* Ensure Bicep is free of comments
+        $cleanContent = Remove-BicepComments -Content $content
+        
+        #* Regex for finding 'targetScope' statement in template file
+        if ($cleanContent -match "(?sm)^(?:\s)*?targetScope") {
+            #* targetScope property is present
+            
+            #* Build regex pattern
+            #* Pieces of the regex for better readability
+            $rxMultiline = "(?sm)"
+            $rxOptionalSpace = "(?:\s*)"
+            $rxSingleQuote = "(?:')"
+            $rxTarget = "(?:targetScope)"
+            $rxScope = "(?:$rxSingleQuote(?:$rxOptionalSpace(resourceGroup|subscription|managementGroup|tenant))$rxSingleQuote)"
 
-        if ($templateMatchesRegex) {
-            $targetScope = $templateMatchesRegex.Matches.Groups[1].Value
-            Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement found in template file content."
-            Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($targetScope)'"
+            #* Complete regex
+            # (?sm)^(?:\s*)(?:targetScope)(?:\s*)=(?:\s*)(?:(?:')(?:(?:\s*)(resourceGroup|subscription|managementGroup|tenant))(?:')).*?
+            $regex = "$($rxMultiline)^$($rxOptionalSpace)$($rxTarget)$($rxOptionalSpace)=$($rxOptionalSpace)$($rxScope).*?"
+
+            if ($cleanContent -match $regex) {
+                $targetScope = $Matches[1]
+                Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement found in template file content."
+                Write-Debug "[Resolve-TemplateDeploymentScope()] Resolved: '$($targetScope)'"
+            }
+            else {
+                throw "[Resolve-ParameterFileTarget()] Invalid 'targetScope' statement found in template file content. Must either not be present, or be one of 'resourceGroup', 'subscription', 'managementGroup' or 'tenant'"
+            }
         }
         else {
+            #* targetScope property is not present. Defaulting to 'resourceGroup'
             Write-Debug "[Resolve-TemplateDeploymentScope()] Valid 'targetScope' statement not found in parameter file content. Defaulting to resourceGroup scope"
             $targetScope = "resourceGroup"
         }
@@ -339,11 +355,11 @@ function Remove-BicepComments {
         $Content = $Content -replace [regex]::Escape($key), $strings[$key]
     }
     
-    # Trim leading/trailing whitespace for each line
-    $Content = ($Content -split "`r?`n" | ForEach-Object { $_.Trim() }) -join "`n"
-    
     # Replace multiple blank lines with a single blank line outside of strings
-    $Content = $Content -replace "(\n{2,})", "`n"
+    $Content = $Content -replace "(\n{2,})", "`n`n"
+    
+    # Trim trailing whitespace for each line
+    $Content = ($Content -split "`r?`n" | ForEach-Object { $_.TrimEnd() }) -join "`n"
     
     # Remove leading and trailing blank lines
     $Content = $Content -replace "^(\n)+|(\n)+$", ""
