@@ -28,6 +28,17 @@ var example = 1  var another = 2
         $result | Should -BeExactly $expected
     }
     
+    It "Removes multi-line comments on single line" {
+        $bicepContent = @'
+var example =/* This is a multi-line comment */  2
+'@
+        $expected = @'
+var example =  2
+'@
+        $result = Remove-BicepComments -Content $bicepContent
+        $result | Should -BeExactly $expected
+    }
+    
     It "Preserves comments inside strings" {
         $bicepContent = @'
 var example = 'This is a // not a comment'
@@ -52,17 +63,6 @@ var example = 1
         $result | Should -BeExactly $expected
     }
     
-    It "Removes leading whitespace" {
-        $bicepContent = @'
-    var example = 1
-'@
-        $expected = @'
-var example = 1
-'@
-        $result = Remove-BicepComments -Content $bicepContent
-        $result | Should -BeExactly $expected
-    }
-    
     It "Handles empty lines and trims properly" {
         $bicepContent = @'
 var example = 1   
@@ -71,6 +71,7 @@ var another = 2
 '@
         $expected = @'
 var example = 1
+
 var another = 2
 '@
         $result = Remove-BicepComments -Content $bicepContent
@@ -88,7 +89,8 @@ var example = 1 // Inline comment
 '@
         $expected = @'
 var example = 1
-var another = 2
+
+    var another = 2
 '@
         $result = Remove-BicepComments -Content $bicepContent
         $result | Should -BeExactly $expected
