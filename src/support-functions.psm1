@@ -149,11 +149,7 @@ function Resolve-TemplateDeploymentScope {
     $targetScope = ""
     $deploymentFile = Get-Item -Path $DeploymentFilePath
     
-    if ($DeploymentConfig.scope) {
-        Write-Debug "[Resolve-TemplateDeploymentScope()] TargetScope determined by scope property in deploymentconfig.json file"
-        $targetScope = $DeploymentConfig.scope
-    }
-    elseif ($deploymentFile.Extension -eq ".bicep") {
+    if ($deploymentFile.Extension -eq ".bicep") {
         $referenceString = $deploymentFile.Name
     }
     elseif ($deploymentFile.Extension -eq ".bicepparam") {
