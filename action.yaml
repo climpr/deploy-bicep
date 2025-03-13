@@ -63,7 +63,7 @@ runs:
         $outputs = @{
           "deploy"            = "Deploy"
           "type"              = "Type"
-          "name"              = "DeploymentName"
+          "name"              = "Name"
           "environment"       = "Environment"
           "scope"             = "Scope"
           "azure-cli-version" = "AzureCliVersion"
