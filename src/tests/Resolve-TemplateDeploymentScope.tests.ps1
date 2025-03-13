@@ -69,7 +69,7 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
         }
     }
 
-    Context "When scope is defined in deploymentcondif.jsonc" {
+    Context "When scope is defined in deploymentconfig.jsonc" {
         BeforeAll {
             $script:param = @{
                 DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
