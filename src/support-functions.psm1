@@ -332,34 +332,37 @@ function Join-HashTable {
 
 function Remove-BicepComments {
     param ([string]$Content)
-    
-    # Preserve strings before removing comments
-    $stringPattern = "'([^']*)'"
+
+    # Normalize line endings to Unix style for consistency
+    $Content = $Content -replace "`r`n", "`n"
+
+    # Preserve strings before removing comments (ensuring single-line strings only)
+    $stringPattern = "'[^'\r\n]*'"
     $strings = @{}
     $Content = $Content -replace $stringPattern, {
         $key = "__STRING$($strings.Count)__"
         $strings[$key] = $_
         return $key
     }
-    
+
     # Remove comments
     $Content = $Content -replace "//.*", ""  # Single-line comments
-    $Content = $Content -replace "/\*([\s\S]*?)\*/", ""  # Multi-line comments
-    
+    $Content = $Content -replace "/\*[\s\S]*?\*/", ""  # Multi-line comments (non-greedy)
+
     # Restore strings
     foreach ($key in $strings.Keys) {
         $Content = $Content -replace [regex]::Escape($key), $strings[$key]
     }
-    
+
     # Replace multiple blank lines with a single blank line outside of strings
     $Content = $Content -replace "(\n{2,})", "`n`n"
     
-    # Trim trailing whitespace for each line
-    $Content = ($Content -split "`r?`n" | ForEach-Object { $_.TrimEnd() }) -join "`n"
-    
+    # Trim trailing whitespace on each line
+    $Content = ($Content -split "`n" | ForEach-Object { $_.TrimEnd() }) -join "`n"
+
     # Remove leading and trailing blank lines
-    $Content = $Content -replace "^(\n)+|(\n)+$", ""
-    
+    $Content = $Content -replace "^\s*\n+|\n+\s*$", ""
+
     return $Content
 }
 
