@@ -40,14 +40,16 @@ $environmentName = ($deploymentFile.BaseName -split "\.")[0]
 $deploymentDirectory = $deploymentFile.Directory
 $deploymentRelativePath = Resolve-Path -Relative -Path $deploymentDirectory.FullName
 $deploymentFileName = $deploymentFile.Name
-Write-Debug "[$($deploymentDirectory.Name)] Deployment directory path: $deploymentRelativePath"
-Write-Debug "[$($deploymentDirectory.Name)] Deployment file path: $deploymentFileRelativePath"
 
-#* Resolve deployment name
-$deploymentName = $deploymentDirectory.Name
+#* Resolve deployment name and id
+$deploymentBaseName = $deploymentDirectory.Name
+$deploymentId = "$deploymentBaseName-$environmentName"
+
+Write-Debug "[$deploymentId] Deployment directory path: $deploymentRelativePath"
+Write-Debug "[$deploymentId] Deployment file path: $deploymentFileRelativePath"
 
 #* Create deployment objects
-Write-Debug "[$deploymentName][$environmentName] Processing deployment file: $deploymentFileRelativePath"
+Write-Debug "[$deploymentId] Processing deployment file: $deploymentFileRelativePath"
 
 #* Get deploymentConfig
 $param = @{
@@ -74,21 +76,23 @@ else {
 }
 
 #* Create deploymentObject
-Write-Debug "[$deploymentName] Creating deploymentObject"
+Write-Debug "[$deploymentId] Creating deploymentObject"
 
 $deploymentObject = [pscustomobject]@{
-    Deploy            = $true
-    AzureCliVersion   = $deploymentConfig.azureCliVersion
-    Environment       = $environmentName
-    Type              = $deploymentConfig.type ?? "deployment"
-    Scope             = Resolve-TemplateDeploymentScope -DeploymentFilePath $deploymentFileRelativePath -DeploymentConfig $deploymentConfig
-    ParameterFile     = $parameterFile
-    TemplateReference = $templateReference
-    DeploymentConfig  = $deploymentConfig
-    Name              = $deploymentConfig.name ?? "$deploymentName-$environmentName-$(git rev-parse --short HEAD)"
-    Location          = $deploymentConfig.location
-    ManagementGroupId = $deploymentConfig.managementGroupId
-    ResourceGroupName = $deploymentConfig.resourceGroupName
+    Deploy             = $true
+    AzureCliVersion    = $deploymentConfig.azureCliVersion
+    Environment        = $environmentName
+    Type               = $deploymentConfig.type ?? "deployment"
+    Scope              = Resolve-TemplateDeploymentScope -DeploymentFilePath $deploymentFileRelativePath -DeploymentConfig $deploymentConfig
+    ParameterFile      = $parameterFile
+    TemplateReference  = $templateReference
+    DeploymentConfig   = $deploymentConfig
+    DeploymentBaseName = $deploymentBaseName
+    DeploymentId       = $deploymentId
+    Name               = $deploymentConfig.name ?? "$deploymentId-$(git rev-parse --short HEAD)"
+    Location           = $deploymentConfig.location
+    ManagementGroupId  = $deploymentConfig.managementGroupId
+    ResourceGroupName  = $deploymentConfig.resourceGroupName
 }
 
 #* Create deployment command
@@ -299,17 +303,17 @@ switch ($deploymentObject.Type) {
 $deploymentObject | Add-Member -MemberType NoteProperty -Name "AzureCliCommand" -Value ($azCliCommand -join " ")
 
 #* Exclude disabled deployments
-Write-Debug "[$deploymentName] Checking if deployment is disabled in the deploymentconfig file."
+Write-Debug "[$deploymentId] Checking if deployment is disabled in the deploymentconfig file."
 if ($deploymentConfig.disabled) {
     $deploymentObject.Deploy = $false
-    Write-Debug "[$deploymentName] Deployment is disabled for all triggers in the deploymentconfig file. Deployment is skipped."
+    Write-Debug "[$deploymentId] Deployment is disabled for all triggers in the deploymentconfig file. Deployment is skipped."
 }
 if ($deploymentConfig.triggers -and $deploymentConfig.triggers.ContainsKey($GitHubEventName) -and $deploymentConfig.triggers[$GitHubEventName].disabled) {
     $deploymentObject.Deploy = $false
-    Write-Debug "[$deploymentName] Deployment is disabled for the current trigger [$GitHubEventName] in the deploymentconfig file. Deployment is skipped."
+    Write-Debug "[$deploymentId] Deployment is disabled for the current trigger [$GitHubEventName] in the deploymentconfig file. Deployment is skipped."
 }
 
-Write-Debug "[$deploymentName] deploymentObject: $($deploymentObject | ConvertTo-Json -Depth 3)"
+Write-Debug "[$deploymentId] deploymentObject: $($deploymentObject | ConvertTo-Json -Depth 3)"
 
 #* Print deploymentObject to console
 if (!$Quiet.IsPresent) {
