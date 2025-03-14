@@ -5,12 +5,12 @@ inputs:
   deployment-file-path:
     description: The path to the .bicep or .bicepparam file.
     required: true
-  
+
   #* [Deprecated] Kept for backward compatibility
   parameter-file-path:
     description: "[Deprecated] The path to the .bicepparam file. (Use deployment-file-path instead)"
     required: false
-  
+
   what-if:
     description: Setting this to true will run the deployment commands in what-if mode.
     required: false
@@ -61,13 +61,15 @@ runs:
 
         #* Write outputs
         $outputs = @{
-          "deploy"            = "Deploy"
-          "type"              = "Type"
-          "name"              = "Name"
-          "environment"       = "Environment"
-          "scope"             = "Scope"
-          "azure-cli-version" = "AzureCliVersion"
-          "azure-cli-command" = "AzureCliCommand"
+          "deployment-base-name" = "DeploymentId"
+          "deployment-id"        = "DeploymentId"
+          "deploy"               = "Deploy"
+          "type"                 = "Type"
+          "name"                 = "Name"
+          "environment"          = "Environment"
+          "scope"                = "Scope"
+          "azure-cli-version"    = "AzureCliVersion"
+          "azure-cli-command"    = "AzureCliCommand"
         }
 
         foreach ($output in $outputs.Keys) {
@@ -213,7 +215,7 @@ runs:
       if: inputs.what-if == 'true'
       shell: bash
       env:
-        NAME: ${{ steps.resolve-deploymentconfig.outputs.name }}
+        NAME: ${{ steps.resolve-deploymentconfig.outputs.deployment-base-name }}
         ENVIRONMENT: ${{ steps.resolve-deploymentconfig.outputs.environment }}
         SCOPE: ${{ steps.resolve-deploymentconfig.outputs.scope }}
       run: |
@@ -230,7 +232,7 @@ runs:
       if: steps.resolve-deploymentconfig.outputs.type == 'deployment' && inputs.what-if == 'true'
       uses: mshick/add-pr-comment@v2
       with:
-        message-id: "${{ steps.resolve-deploymentconfig.outputs.name }}-${{ steps.resolve-deploymentconfig.outputs.environment }}"
+        message-id: ${{ steps.resolve-deploymentconfig.outputs.deployment-id }}
         message-path: deployment.md
 
     - name: Clean created files
