@@ -61,7 +61,7 @@ runs:
 
         #* Write outputs
         $outputs = @{
-          "deployment-base-name" = "DeploymentId"
+          "deployment-base-name" = "DeploymentBaseName"
           "deployment-id"        = "DeploymentId"
           "deploy"               = "Deploy"
           "type"                 = "Type"
