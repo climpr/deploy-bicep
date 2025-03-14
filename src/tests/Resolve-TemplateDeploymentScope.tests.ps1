@@ -68,4 +68,21 @@ Describe "Resolve-TemplateDeploymentScope.ps1" {
             $templateDeploymentScope | Should -Be 'subscription'
         }
     }
+
+    Context "When scope is defined in deploymentconfig.jsonc" {
+        BeforeAll {
+            $script:param = @{
+                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
+                DeploymentConfig   = @{
+                    'managementGroupId' = 'mockMgmtGroupId'
+                    'scope'             = 'subscription'
+                }
+            }
+            $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
+        }
+
+        It "Should resolve DeploymentScope to be [subscription]" {
+            $templateDeploymentScope | Should -Be 'subscription'
+        }
+    }
 }
