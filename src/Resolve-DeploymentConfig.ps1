@@ -261,7 +261,7 @@ switch ($deploymentObject.Type) {
         }
 
         #* Add parameter: --description
-        if ([string]::IsNullOrEmpty($deploymentObject.description)) {
+        if ([string]::IsNullOrEmpty($deploymentConfig.description)) {
             $azCliCommand += '--description ""'
         }
         else {

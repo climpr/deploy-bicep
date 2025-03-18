@@ -6,999 +6,742 @@ BeforeAll {
         Install-PSResource -Name Bicep
     }
     Import-Module $PSScriptRoot/../support-functions.psm1 -Force
-    $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
-    $script:commonParam = @{
-        Quiet                       = $true
-        Debug                       = $false
-        GitHubEventName             = "workflow_dispatch"
-        DefaultDeploymentConfigPath = "$mockDirectory/default.deploymentconfig.json"
-    }
-    $script:shortHash = git rev-parse --short HEAD
 }
 
 Describe "Resolve-DeploymentConfig.ps1" {
-    Context "When the deployment type is 'deployment'" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/default/dev.bicepparam"
+    # MARK: Pester setup
+    BeforeAll {
+        $script:shortHash = git rev-parse --short HEAD
+
+        $script:testRoot = Join-Path $TestDrive 'test'
+        New-Item -Path $testRoot -ItemType Directory -Force | Out-Null
+        
+        $script:defaultDeploymentConfigPath = Join-Path $testRoot "default.deploymentconfig.jsonc"
+        $script:defaultDeploymentConfig = [ordered]@{
+            '$schema'         = "https://raw.githubusercontent.com/climpr/climpr-schemas/main/schemas/v1.0.0/bicep-deployment/deploymentconfig.json#"
+            'location'        = "westeurope"
+            'azureCliVersion' = "2.68.0"
+        }
+        $defaultDeploymentConfig | ConvertTo-Json | Out-File -FilePath $defaultDeploymentConfigPath
+        $script:commonParam = @{
+            Quiet                       = $true
+            Debug                       = $false
+            GitHubEventName             = "workflow_dispatch"
+            DefaultDeploymentConfigPath = $defaultDeploymentConfigPath
+        }
+    }
+
+    BeforeEach {
+        $script:climprConfigFile = Join-Path $testRoot 'climprconfig.jsonc'
+        $script:configFile = Join-Path $testRoot 'deploymentconfig.jsonc'
+        $script:bicepFile = Join-Path $testRoot 'main.bicep'
+        $script:paramFile = Join-Path $testRoot 'main.bicepparam'
+
+        "targetScope = 'subscription'" | Out-File -Path $bicepFile
+        "using 'main.bicep'" | Out-File -Path $paramFile
+
+        $script:commonParams = @{
+            DefaultDeploymentConfigPath = $defaultDeploymentConfigPath
+            GitHubEventName             = "workflow_dispatch"
+            DeploymentFilePath          = $paramFile
+            Quiet                       = $true
+        }
+    }
+
+    AfterEach {
+        Remove-Item -Path $climprConfigFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $configFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $bicepFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $paramFile -Force -ErrorAction SilentlyContinue
+    }
+
+    # MARK: Input files
+    Context "Handle input files correctly" {
+        It "Should handle .bicep file correctly" {
+            $bicepFileRelativePath = Resolve-Path -Relative -Path $bicepFile
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams -DeploymentFilePath $bicepFile
+            $res.TemplateReference | Should -Be $bicepFileRelativePath
+            $res.ParameterFile | Should -BeNullOrEmpty
+        }
+        
+        It "Should handle .bicepparam file correctly" {
+            $paramFileRelativePath = Resolve-Path -Relative -Path $paramFile
+            "using 'main.bicep'" | Set-Content -Path $paramFile
+            
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+            $res.TemplateReference | Should -Be "main.bicep"
+            $res.ParameterFile | Should -Be $paramFileRelativePath
+        }
+    }
+
+    # MARK: Scopes
+    Context "Handle scopes correctly" {
+        It "Should handle 'resourceGroup' scope correctly" {
+            "targetScope = 'resourceGroup'" | Set-Content -Path $bicepFile
+            @{ resourceGroupName = "mock-rg" } | ConvertTo-Json | Set-Content -Path $configFile
+
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+            $res.Scope | Should -Be "resourceGroup"
         }
 
-        It "The 'Deploy' property should be 'true'" {
-            $res.Deploy | Should -BeTrue
-        }
-        It "The 'AzureCliVersion' property should be '2.68.0'" {
-            $res.AzureCliVersion | Should -Be "2.68.0"
-        }
-        It "The 'Type' property should be 'deployment'" {
-            $res.Type | Should -Be "deployment"
-        }
-        It "The 'Scope' property should be 'subscription'" {
+        It "Should handle 'subscription' scope correctly" {
+            "targetScope = 'subscription'" | Set-Content -Path $bicepFile
+
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
             $res.Scope | Should -Be "subscription"
         }
-        It "The 'ParameterFile' property should be './src/tests/mock/deployments/deployment/default/dev.bicepparam'" {
-            $res.ParameterFile | Should -Be "./src/tests/mock/deployments/deployment/default/dev.bicepparam"
+
+        It "Should handle 'managementGroup' scope correctly" {
+            "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
+            @{ managementGroupId = "mock-mg" } | ConvertTo-Json | Set-Content -Path $configFile
+
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+            $res.Scope | Should -Be "managementGroup"
         }
-        It "The 'TemplateReference' property should be 'main.bicep'" {
-            $res.TemplateReference | Should -Be 'main.bicep'
+
+        It "Should handle 'tenant' scope correctly" {
+            "targetScope = 'tenant'" | Set-Content -Path $bicepFile
+
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+            $res.Scope | Should -Be "tenant"
         }
-        It "The 'Name' property should be 'default-dev-$shortHash'" {
-            $res.Name | Should -Be "default-dev-$shortHash"
-        }
-        It "The 'Location' property should be 'westeurope'" {
-            $res.Location | Should -Be "westeurope"
-        }
-        It "The 'ManagementGroupId' property should be empty" {
-            $res.ManagementGroupId | Should -BeNullOrEmpty
-        }
-        It "The 'ResourceGroupName' property should be empty" {
-            $res.ResourceGroupName | Should -BeNullOrEmpty
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name default-dev-$shortHash --parameters $mockDirectory/deployments/deployment/default/dev.bicepparam"
+
+        It "Should fail if target scope is 'tenant' and type is 'deploymentStack'" {
+            "targetScope = 'tenant'" | Set-Content -Path $bicepFile
+            @{ type = "deploymentStack" } | ConvertTo-Json | Set-Content -Path $configFile
+
+            { ./src/Resolve-DeploymentConfig.ps1 @commonParams }
+            | Should -Throw "Deployment stacks are not supported for tenant scoped deployments."
         }
     }
 
-    Context "When a deployment uses a local template" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/local-template/dev.bicepparam"
+    # MARK: Remote templates
+    Context "Handle direct .bicepparam remote template reference correctly" {
+        It "Should handle remote Azure Container Registry (ACR) template correctly" {
+            "using 'br/public:avm/res/resources/resource-group:0.4.1'" | Set-Content -Path $paramFile
+
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+            $res.TemplateReference | Should -Be 'br/public:avm/res/resources/resource-group:0.4.1'
+            $res.Scope | Should -Be 'subscription'
         }
 
-        It "The 'TemplateReference' property should be 'main.bicep'" {
-            $res.TemplateReference | Should -Be 'main.bicep'
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name local-template-dev-$shortHash --parameters $mockDirectory/deployments/deployment/local-template/dev.bicepparam"
+        #? No authenticated pipeline to run test. Hence, template specs cannot be restored.
+        # It "Should handle remote Template Specs correctly" {
+        #     "using 'ts:resourceId:tag'" | Set-Content -Path $paramFile
+        #     $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+        #     $res | ConvertTo-Json -Depth 10 | Write-Host
+        #     $res.TemplateReference | Should -Be 'br/public:avm/res/resources/resource-group:0.4.1'
+        #     $res.Scope | Should -Be 'subscription'
+        # }
+    }
+
+    # MARK: Common parameters
+    Context "Handle common parameters" {
+        Context "'Deploy' parameter" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario         = "deploymentConfig.disabled not specified (default)"
+                    deploymentConfig = @{}
+                    expected         = $true
+                }
+                @{
+                    scenario         = "deploymentConfig.disabled set to null"
+                    deploymentConfig = @{ disabled = $null }
+                    expected         = $true
+                }
+                @{
+                    scenario         = "deploymentConfig.disabled set to false"
+                    deploymentConfig = @{ disabled = $false }
+                    expected         = $true
+                }
+                @{
+                    scenario         = "deploymentConfig.disabled set to true"
+                    deploymentConfig = @{ disabled = $true }
+                    expected         = $false
+                }
+                @{
+                    scenario         = "deploymentConfig.triggers.<eventName>.disabled set to true"
+                    deploymentConfig = @{ disabled = $true; triggers = @{ workflow_dispatch = @{ disabled = $true } } }
+                    expected         = $false
+                }
+                @{
+                    scenario         = "deploymentConfig.triggers.<eventName>.disabled set to false but deploymentConfig.disabled set to true"
+                    deploymentConfig = @{ disabled = $true; triggers = @{ workflow_dispatch = @{ disabled = $false } } }
+                    expected         = $false
+                }
+            ) {
+                param ($scenario, $deploymentConfig, $expected)
+
+                $deploymentConfig | ConvertTo-Json | Set-Content -Path $configFile
+                $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                $res.Deploy | Should -Be $expected
+            }
         }
     }
 
-    Context "When a deployment uses a remote template" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/remote-template/dev.bicepparam"
-        }
+    # MARK: Deployment
+    Context "When deployment is a normal deployment" {
+        Context "When the deployment type is 'deployment'" {
+            It "It should handle all properties correctly" {
+                $paramFileRelative = Resolve-Path -Relative -Path $paramFile
+                $deploymentName = "test-main-$shortHash" # Name of the temporary parent directory + 'main' from main.bicepparam + git short hash
 
-        It "The 'TemplateReference' property should be 'br/public:avm/res/resources/resource-group:0.2.3'" {
-            $res.TemplateReference | Should -Be 'br/public:avm/res/resources/resource-group:0.2.3'
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name remote-template-dev-$shortHash --parameters $mockDirectory/deployments/deployment/remote-template/dev.bicepparam"
-        }
-    }
-
-    Context "When a deployment uses a template with local modules" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/local-modules/dev.bicepparam"
-        }
-
-        It "The 'TemplateReference' property should be 'main.bicep'" {
-            $res.TemplateReference | Should -Be 'main.bicep'
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name local-modules-dev-$shortHash --parameters $mockDirectory/deployments/deployment/local-modules/dev.bicepparam"
-        }
-    }
-
-    Context "When a deployment uses a template with remote modules" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/remote-modules/dev.bicepparam"
-        }
-
-        It "Should not throw an error" {
-            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/remote-modules/dev.bicepparam" } | `
-                Should -Not -Throw
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name remote-modules-dev-$shortHash --parameters $mockDirectory/deployments/deployment/remote-modules/dev.bicepparam"
-        }
-    }
-
-    Context "When a deployment does not have a .bicepparam file" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep"
-        }
-
-        It "Should not throw an error" {
-            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep" } | `
-                Should -Not -Throw
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name no-param-default-dev-$shortHash --template-file $mockDirectory/deployments/deployment/no-param-default/dev.bicep"
-        }
-    }
-
-    Context "When a deployment does not have a .bicepparam file" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep"
-        }
-
-        It "Should not throw an error" {
-            { ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/no-param-default/dev.bicep" } | `
-                Should -Not -Throw
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name no-param-default-dev-$shortHash --template-file $mockDirectory/deployments/deployment/no-param-default/dev.bicep"
-        }
-    }
-
-    Context "When a deployment uses the 'DeploymentWhatIf' parameter" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/default/dev.bicepparam" -DeploymentWhatIf $true
-        }
-
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location westeurope --name default-dev-$shortHash --parameters $mockDirectory/deployments/deployment/default/dev.bicepparam --what-if"
-        }
-    }
-
-    Context "When the deployment type is 'deploymentStack'" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'Deploy' property should be 'true'" {
-            $res.Deploy | Should -BeTrue
-        }
-        It "The 'AzureCliVersion' property should be '2.68.0'" {
-            $res.AzureCliVersion | Should -Be "2.68.0"
-        }
-        It "The 'Type' property should be 'deploymentStack'" {
-            $res.Type | Should -Be "deploymentStack"
-        }
-        It "The 'Scope' property should be 'subscription'" {
-            $res.Scope | Should -Be "subscription"
-        }
-        It "The 'ParameterFile' property should be './src/tests/mock/deployments/stack/default/dev.bicepparam'" {
-            $res.ParameterFile | Should -Be "./src/tests/mock/deployments/stack/default/dev.bicepparam"
-        }
-        It "The 'TemplateReference' property should be 'main.bicep'" {
-            $res.TemplateReference | Should -Be 'main.bicep'
-        }
-        It "The 'Name' property should be 'default-stack'" {
-            $res.Name | Should -Be "default-stack"
-        }
-        It "The 'Location' property should be 'westeurope'" {
-            $res.Location | Should -Be "westeurope"
-        }
-        It "The 'ManagementGroupId' property should be empty" {
-            $res.ManagementGroupId | Should -BeNullOrEmpty
-        }
-        It "The 'ResourceGroupName' property should be empty" {
-            $res.ResourceGroupName | Should -BeNullOrEmpty
-        }
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack does not have a 'description' property" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
+                $properties = [ordered]@{
+                    Deploy            = $true
+                    AzureCliVersion   = $defaultDeploymentConfig.azureCliVersion
+                    Type              = "deployment"
+                    Scope             = "subscription"
+                    ParameterFile     = $paramFileRelative
+                    TemplateReference = 'main.bicep'
+                    Name              = $deploymentName
+                    Location          = "westeurope"
+                    ManagementGroupId = $null
+                    ResourceGroupName = $null
+                    AzureCliCommand   = "az deployment sub create --location westeurope --name $deploymentName --parameters $paramFileRelative"
+                }
+                
+                $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                foreach ($key in $properties.Keys) {
+                    $res.$key | Should -Be $properties[$key]
                 }
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
+        # MARK: Deployment 'DeploymentWhatIf'
+        Context "Handle 'DeploymentWhatIf' parameter" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no 'DeploymentWhatIf' parameter"
+                    expected = "^(?!.*--what-if).*$"
+                }
+                @{
+                    scenario         = "false 'DeploymentWhatIf' parameter"
+                    deploymentWhatIf = $false
+                    expected         = "^(?!.*--what-if).*$"
+                }
+                @{
+                    scenario         = "true 'DeploymentWhatIf' parameter"
+                    deploymentWhatIf = $true
+                    expected         = "--what-if"
+                }
+            ) {
+                param ($scenario, $deploymentWhatIf, $expected)
+            
+                $deploymentWhatIfParam = @{}
+                if ($deploymentWhatIf) {
+                    $deploymentWhatIfParam = @{ DeploymentWhatIf = $deploymentWhatIf }
+                }
+
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams @deploymentWhatIfParam
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
+            }
         }
     }
 
-    Context "When the stack has a 'description' property with a null value" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
-                    description      = $null
+    # MARK: Stack
+    Context "When deployment is a Deployment stack" {
+        Context "When the deployment type is 'deploymentStack'" {
+            It "It should handle all properties correctly" {
+                $paramFileRelative = Resolve-Path -Relative -Path $paramFile
+                $deploymentName = "test-main-$shortHash" # Name of the temporary parent directory + 'main' from main.bicepparam + git short hash
+
+                $properties = [ordered]@{
+                    Deploy            = $true
+                    AzureCliVersion   = $defaultDeploymentConfig.azureCliVersion
+                    Type              = "deploymentStack"
+                    Scope             = "subscription"
+                    ParameterFile     = $paramFileRelative
+                    TemplateReference = 'main.bicep'
+                    Name              = $deploymentName
+                    Location          = "westeurope"
+                    ManagementGroupId = $null
+                    ResourceGroupName = $null
+                    AzureCliCommand   = "az stack sub create --location westeurope --name $deploymentName --parameters $paramFileRelative --yes --action-on-unmanage detachAll --deny-settings-mode none --description `"`" --tags `"`""
+                }
+                
+                @{ type = "deploymentStack" } | ConvertTo-Json | Set-Content -Path $configFile
+
+                $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                foreach ($key in $properties.Keys) {
+                    $res.$key | Should -Be $properties[$key]
                 }
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
-
-        It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'description' property with an empty string" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
-                    description      = ""
+        
+        # MARK: Stack 'description'
+        Context "When handling stack 'description' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no description property"
+                    expected = '--description ""'
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'description' property with an actual string" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
-                    description      = "mock-description"
+                @{
+                    scenario    = "null description property"
+                    description = $null
+                    expected    = '--description ""'
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--description `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'bypassStackOutOfSyncError' property is unset" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
+                @{
+                    scenario    = "empty description property"
+                    description = ""
+                    expected    = '--description ""'
                 }
+                @{
+                    scenario    = "non-empty description property"
+                    description = "mock-description"
+                    expected    = '--description mock-description'
+                }
+            ) {
+                param ($scenario, $description, $expected)
+                
+                @{
+                    type        = "deploymentStack"
+                    description = $description
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'bypassStackOutOfSyncError' property set to null" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location                  = "westeurope"
-                    type                      = "deploymentStack"
-                    name                      = "default-stack"
-                    actionOnUnmanage          = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings              = @{
-                        mode = "denyDelete"
-                    }
+        # MARK: Stack 'bypassStackOutOfSyncError'
+        Context "When handling stack 'bypassStackOutOfSyncError' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no bypassStackOutOfSyncError property"
+                    expected = "^(?!.*--bypass-stack-out-of-sync-error).*$"
+                }
+                @{
+                    scenario                  = "null bypassStackOutOfSyncError property"
                     bypassStackOutOfSyncError = $null
+                    expected                  = "^(?!.*--bypass-stack-out-of-sync-error).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'bypassStackOutOfSyncError' property set to false" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location                  = "westeurope"
-                    type                      = "deploymentStack"
-                    name                      = "default-stack"
-                    actionOnUnmanage          = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings              = @{
-                        mode = "denyDelete"
-                    }
+                @{
+                    scenario                  = "false bypassStackOutOfSyncError"
                     bypassStackOutOfSyncError = $false
+                    expected                  = "^(?!.*--bypass-stack-out-of-sync-error).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'bypassStackOutOfSyncError' property set to true" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location                  = "westeurope"
-                    type                      = "deploymentStack"
-                    name                      = "default-stack"
-                    actionOnUnmanage          = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings              = @{
-                        mode = "denyDelete"
-                    }
+                @{
+                    scenario                  = "true bypassStackOutOfSyncError"
                     bypassStackOutOfSyncError = $true
+                    expected                  = '--bypass-stack-out-of-sync-error'
                 }
+            ) {
+                param ($scenario, $bypassStackOutOfSyncError, $expected)
+                
+                $deploymentConfig + @{
+                    type                      = "deploymentStack"
+                    bypassStackOutOfSyncError = $bypassStackOutOfSyncError
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --bypass-stack-out-of-sync-error --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.applyToChildScopes' property is unset" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
+        # MARK: Stack 'denySettings.applyToChildScopes'
+        Context "When handling stack 'denySettings.applyToChildScopes' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no applyToChildScopes property"
+                    expected = "^(?!.*--deny-settings-apply-to-child-scopes).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.applyToChildScopes' property set to null" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
+                @{
+                    scenario           = "null applyToChildScopes property"
+                    applyToChildScopes = $null
+                    expected           = "^(?!.*--deny-settings-apply-to-child-scopes).*$"
+                }
+                @{
+                    scenario           = "false applyToChildScopes"
+                    applyToChildScopes = $false
+                    expected           = "^(?!.*--deny-settings-apply-to-child-scopes).*$"
+                }
+                @{
+                    scenario           = "true applyToChildScopes"
+                    applyToChildScopes = $true
+                    expected           = '--deny-settings-apply-to-child-scopes'
+                }
+            ) {
+                param ($scenario, $applyToChildScopes, $expected)
+                
+                $deploymentConfig + @{
+                    type         = "deploymentStack"
+                    denySettings = @{
                         mode               = "denyDelete"
-                        applyToChildScopes = $null
+                        applyToChildScopes = $applyToChildScopes
                     }
-                }
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.applyToChildScopes' property set to false" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode               = "denyDelete"
-                        applyToChildScopes = $false
-                    }
+        # MARK: Stack 'denySettings.excludedActions'
+        Context "When handling stack 'denySettings.excludedActions' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no excludedActions property"
+                    expected = "^(?!.*--deny-settings-excluded-actions).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should not include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.applyToChildScopes' property set to true" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode               = "denyDelete"
-                        applyToChildScopes = $true
-                    }
+                @{
+                    scenario        = "null excludedActions property"
+                    excludedActions = $null
+                    expected        = "^(?!.*--deny-settings-excluded-actions).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--bypass-stack-out-of-sync-error `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-apply-to-child-scopes --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedActions' property is unset" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
+                @{
+                    scenario        = "empty array excludedActions"
+                    excludedActions = @()
+                    expected        = '--deny-settings-excluded-actions ""'
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-actions `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedActions' property is set to null" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
+                @{
+                    scenario        = "single item excludedActions"
+                    excludedActions = @("mock-action")
+                    expected        = '--deny-settings-excluded-actions "mock-action"'
+                }
+                @{
+                    scenario        = "multiple items excludedActions"
+                    excludedActions = @("mock-action1", "mock-action2")
+                    expected        = '--deny-settings-excluded-actions "mock-action1" "mock-action2"'
+                }
+            ) {
+                param ($scenario, $excludedActions, $expected)
+                
+                $deploymentConfig + @{
+                    type         = "deploymentStack"
+                    denySettings = @{
                         mode            = "denyDelete"
-                        excludedActions = $null
+                        excludedActions = $excludedActions
                     }
-                }
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-actions `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedActions' property is set to an empty array" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode            = "denyDelete"
-                        excludedActions = @()
-                    }
+        # MARK: Stack 'denySettings.excludedPrincipals'
+        Context "When handling stack 'denySettings.excludedPrincipals' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no excludedPrincipals property"
+                    expected = "^(?!.*--deny-settings-excluded-principals).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-actions `"`" --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedActions' property is set to an array with a single entry" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode            = "denyDelete"
-                        excludedActions = @(
-                            "mock-action"
-                        )
-                    }
+                @{
+                    scenario           = "null excludedPrincipals property"
+                    excludedPrincipals = $null
+                    expected           = "^(?!.*--deny-settings-excluded-principals).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"mock-action`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-actions `"mock-action`" --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedActions' property is set to an array with a multiple entries" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode            = "denyDelete"
-                        excludedActions = @(
-                            "mock-action1"
-                            "mock-action2"
-                        )
-                    }
+                @{
+                    scenario           = "empty array excludedPrincipals"
+                    excludedPrincipals = @()
+                    expected           = '--deny-settings-excluded-principals ""'
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-actions `"mock-action1`" `"mock-action2`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-actions `"mock-action1`" `"mock-action2`" --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedPrincipals' property is unset" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
+                @{
+                    scenario           = "single item excludedPrincipals"
+                    excludedPrincipals = @("mock-principal")
+                    expected           = '--deny-settings-excluded-principals "mock-principal"'
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-principals `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to null" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
+                @{
+                    scenario           = "multiple items excludedPrincipals"
+                    excludedPrincipals = @("mock-principal1", "mock-principal2")
+                    expected           = '--deny-settings-excluded-principals "mock-principal1" "mock-principal2"'
+                }
+            ) {
+                param ($scenario, $excludedPrincipals, $expected)
+                
+                $deploymentConfig + @{
+                    type         = "deploymentStack"
+                    denySettings = @{
                         mode               = "denyDelete"
-                        excludedPrincipals = $null
+                        excludedPrincipals = $excludedPrincipals
                     }
-                }
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should not include the '--deny-settings-excluded-principals `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to an empty array" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
+        # MARK: Stack 'actionOnUnmanage'
+        Context "When handling stack 'actionOnUnmanage' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no actionOnUnmanage property"
+                    expected = "--action-on-unmanage detachAll"
+                }
+                @{
+                    scenario         = "null actionOnUnmanage property"
+                    actionOnUnmanage = $null
+                    expected         = "--action-on-unmanage detachAll"
+                }
+                @{
+                    scenario         = "resources and resourceGroups is 'delete'"
+                    actionOnUnmanage = @{ resources = "delete"; resourceGroups = "delete" }
+                    expected         = "--action-on-unmanage deleteAll"
+                }
+                @{
+                    scenario         = "resources is 'delete' but resourceGroups is not 'delete'"
+                    actionOnUnmanage = @{ resources = "delete" }
+                    expected         = "--action-on-unmanage deleteResources"
+                }
+            ) {
+                param ($scenario, $actionOnUnmanage, $expected)
+            
+                $deploymentConfig + @{
                     type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode               = "denyDelete"
-                        excludedPrincipals = @()
-                    }
-                }
+                    actionOnUnmanage = $actionOnUnmanage
+                } | ConvertTo-Json | Set-Content -Path $configFile
+            
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-principals `"`" --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to an array with a single entry" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
+            Context "When scope is 'managementGroup'" {
+                It "Should handle <scenario> correctly" -TestCases @(
+                    @{
+                        scenario         = "resources, resourceGroups and managementGroups is 'delete'"
+                        actionOnUnmanage = @{ resources = "delete"; resourceGroups = "delete"; managementGroups = "delete" }
+                        expected         = "--action-on-unmanage deleteAll"
                     }
-                    denySettings     = @{
-                        mode               = "denyDelete"
-                        excludedPrincipals = @(
-                            "mock-principal"
-                        )
+                    @{
+                        scenario         = "resources and resourceGroups is 'delete' but managementGroups is not 'delete'"
+                        actionOnUnmanage = @{ resources = "delete"; resourceGroups = "delete" }
+                        expected         = "--action-on-unmanage deleteResources"
                     }
+                    @{
+                        scenario         = "resources is 'delete' but resourceGroups is not 'delete'"
+                        actionOnUnmanage = @{ resources = "delete" }
+                        expected         = "--action-on-unmanage deleteResources"
+                    }
+                ) {
+                    param ($scenario, $actionOnUnmanage, $expected)
+                
+                    $deploymentConfig + @{
+                        type              = "deploymentStack"
+                        managementGroupId = "mock-mg"
+                        actionOnUnmanage  = $actionOnUnmanage
+                    } | ConvertTo-Json | Set-Content -Path $configFile
+
+                    # Set target scope to managementGroup
+                    "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
+                
+                    ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                    | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
                 }
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
         }
 
-        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"mock-principal`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-principals `"mock-principal`" --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a 'denySettings.excludedPrincipals' property is set to an array with a multiple entries" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode               = "denyDelete"
-                        excludedPrincipals = @(
-                            "mock-principal1"
-                            "mock-principal2"
-                        )
-                    }
+        # MARK: Stack 'tags'
+        Context "When handling stack 'tags' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no tags property"
+                    tags     = $null
+                    expected = '--tags ""'
                 }
+                @{
+                    scenario = "empty tags"
+                    tags     = @{}
+                    expected = '--tags ""'
+                }
+                @{
+                    scenario = "single tag"
+                    tags     = @{ "key" = "value" }
+                    expected = "--tags 'key=value'"
+                }
+                @{
+                    scenario = "multiple tags"
+                    tags     = [ordered]@{ "key1" = "value1"; "key2" = "value2" }
+                    expected = "--tags 'key1=value1' 'key2=value2'"
+                }
+            ) {
+                param ($scenario, $tags, $expected)
+                
+                @{
+                    type = "deploymentStack"
+                    tags = $tags
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
+            }
+        }
+
+        # MARK: Stack 'deploymentResourceGroup'
+        Context "When handling stack 'deploymentResourceGroup' property" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario         = "no deploymentResourceGroup property"
+                    deploymentConfig = @{}
+                    expected         = "^(?!.*--deployment-resource-group).*$"
+                }
+                @{
+                    scenario         = "null deploymentResourceGroup"
+                    deploymentConfig = @{ deploymentResourceGroup = $null }
+                    expected         = "^(?!.*--deployment-resource-group).*$"
+                }
+                @{
+                    scenario         = "empty deploymentResourceGroup"
+                    deploymentConfig = @{ deploymentResourceGroup = "" }
+                    expected         = "^(?!.*--deployment-resource-group).*$"
+                }
+                @{
+                    scenario         = "non-empty deploymentResourceGroup"
+                    deploymentConfig = @{ deploymentResourceGroup = "mock-rg" }
+                    expected         = "--deployment-resource-group mock-rg"
+                }
+            ) {
+                param ($scenario, $deploymentConfig, $expected)
+                
+                $deploymentConfig + @{
+                    type = "deploymentStack"
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
+            # TODO: Not supported yet
+            # It "Should fail if 'deploymentResourceGroup' is specified and the scope is 'resourceGroup'" {
+            #     @{ type = "deploymentStack"; deploymentResourceGroup = "mock-rg"; resourceGroupName = "mock-rg" } | ConvertTo-Json | Set-Content -Path $configFile
+            #     "targetScope = 'resourceGroup'" | Set-Content -Path $bicepFile
+
+            #     $errorActionPreference = 'Stop'
+            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentResourceGroup' property is only supported when the target scope is 'resourceGroup'."
+            # }
+
+            # It "Should fail if 'deploymentResourceGroup' is specified and the scope is 'managementGroup'" {
+            #     @{ type = "deploymentStack"; deploymentResourceGroup = "mock-rg"; managementGroupId = "mock-mg" } | ConvertTo-Json | Set-Content -Path $configFile
+            #     "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
+
+            #     $errorActionPreference = 'Stop'
+            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentResourceGroup' property is only supported when the target scope is 'resourceGroup'."
+            # }
         }
 
-        It "The 'AzureCliCommand' property should include the '--deny-settings-excluded-principals `"mock-principal1`" `"mock-principal2`"' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --deny-settings-excluded-principals `"mock-principal1`" `"mock-principal2`" --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack does not have a tags property" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
+        # MARK: Stack 'deploymentSubscription'
+        Context "Handle 'deploymentSubscription' property" {
+            It "Should handle <scenario> deploymentSubscription correctly" -TestCases @(
+                @{
+                    scenario         = "no deploymentSubscription property"
+                    deploymentConfig = @{}
+                    expected         = "^(?!.*--deployment-resource-group).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the correct tags syntax" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has an empty tags property" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
-                    tags             = @{}
+                @{
+                    scenario         = "null deploymentSubscription"
+                    deploymentConfig = @{ deploymentSubscription = $null }
+                    expected         = "^(?!.*--deployment-subscription).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the correct tags syntax" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a tags property containing a single entry" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
-                    tags             = @{
-                        "key" = "value"
-                    }
+                @{
+                    scenario         = "empty deploymentSubscription"
+                    deploymentConfig = @{ deploymentSubscription = "" }
+                    expected         = "^(?!.*--deployment-subscription).*$"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the correct tags syntax" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags 'key=value'"
-        }
-    }
-
-    Context "When the stack has a tags property containing multiple entries" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
-                    tags             = [ordered]@{
-                        "key1" = "value1"
-                        "key2" = "value2"
-                    }
+                @{
+                    scenario         = "non-empty deploymentSubscription"
+                    deploymentConfig = @{ deploymentSubscription = "mock-sub" }
+                    expected         = "--deployment-subscription mock-sub"
                 }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the correct tags syntax" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags 'key1=value1' 'key2=value2'"
-        }
-    }
-
-    Context "When the stack has a subscription scope and 'deploymentResourceGroup' is not specified" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location         = "westeurope"
-                    type             = "deploymentStack"
-                    name             = "default-stack"
-                    actionOnUnmanage = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings     = @{
-                        mode = "denyDelete"
-                    }
-                }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should not include the '--deployment-resource-group' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a subscription scope and 'deploymentResourceGroup' is specified" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location                = "westeurope"
-                    type                    = "deploymentStack"
-                    name                    = "default-stack"
-                    actionOnUnmanage        = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings            = @{
-                        mode = "denyDelete"
-                    }
-                    deploymentResourceGroup = "mock-rg"
-                }
-            }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--deployment-resource-group' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack sub create --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --yes --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --deployment-resource-group mock-rg --tags `"`""
-        }
-    }
-
-    Context "When the stack has a management group scope and 'deploymentSubscription' is not specified" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location          = "westeurope"
-                    managementGroupId = "mock-managementgroup-id"
+            ) {
+                param ($scenario, $deploymentConfig, $expected)
+                
+                $deploymentConfig + @{
                     type              = "deploymentStack"
-                    name              = "default-stack"
-                    actionOnUnmanage  = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings      = @{
-                        mode = "denyDelete"
-                    }
-                }
+                    managementGroupId = 'mock-mg'
+                } | ConvertTo-Json | Set-Content -Path $configFile
+                "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
+
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
 
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/managementgroup/dev.bicepparam"
+            # TODO: Not supported yet
+            # It "Should fail if 'deploymentSubscription' is specified and the scope is 'resourceGroup'" {
+            #     @{ type = "deploymentStack"; deploymentSubscription = "mock-sub"; resourceGroupName = "mock-rg" } | ConvertTo-Json | Set-Content -Path $configFile
+            #     "targetScope = 'resourceGroup'" | Set-Content -Path $bicepFile
+
+            #     $errorActionPreference = 'Stop'
+            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentSubscription' property is only supported when the target scope is 'managementGroup'."
+            # }
+
+            # It "Should fail if 'deploymentResourceGroup' is specified and the scope is 'subscription'" {
+            #     @{ type = "deploymentStack"; deploymentSubscription = "mock-sub" } | ConvertTo-Json | Set-Content -Path $configFile
+            #     "targetScope = 'subscription'" | Set-Content -Path $bicepFile
+
+            #     $errorActionPreference = 'Stop'
+            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentSubscription' property is only supported when the target scope is 'managementGroup'."
+            # }
         }
 
-        It "The 'AzureCliCommand' property should not include the '--deployment-resource-group' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack mg create --location westeurope --management-group-id mock-managementgroup-id --name default-stack --parameters $mockDirectory/deployments/stack/managementgroup/dev.bicepparam --yes --action-on-unmanage deleteResources --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When the stack has a management group scope and 'deploymentSubscription' is specified" {
-        BeforeAll {
-            Mock Get-DeploymentConfig {
-                return @{
-                    location               = "westeurope"
-                    managementGroupId      = "mock-managementgroup-id"
-                    type                   = "deploymentStack"
-                    name                   = "default-stack"
-                    actionOnUnmanage       = @{
-                        resources      = "delete"
-                        resourceGroups = "delete"
-                    }
-                    denySettings           = @{
-                        mode = "denyDelete"
-                    }
-                    deploymentSubscription = "mock-sub"
+        # MARK: Stack 'DeploymentWhatIf'
+        Context "Handle 'DeploymentWhatIf' parameter" {
+            It "Should handle <scenario> correctly" -TestCases @(
+                @{
+                    scenario = "no 'DeploymentWhatIf' parameter"
+                    expected = "^az stack sub create"
                 }
+                @{
+                    scenario         = "false 'DeploymentWhatIf' parameter"
+                    deploymentWhatIf = $false
+                    expected         = "^az stack sub create"
+                }
+                @{
+                    scenario         = "true 'DeploymentWhatIf' parameter"
+                    deploymentWhatIf = $true
+                    expected         = "^az stack sub validate"
+                }
+            ) {
+                param ($scenario, $deploymentWhatIf, $expected)
+            
+                $deploymentConfig + @{ type = "deploymentStack" } | ConvertTo-Json | Set-Content -Path $configFile
+
+                # Create deployment parameter object
+                $deploymentWhatIfParam = @{}
+                if ($deploymentWhatIf) {
+                    $deploymentWhatIfParam = @{ DeploymentWhatIf = $deploymentWhatIf }
+                }
+
+                ./src/Resolve-DeploymentConfig.ps1 @commonParams @deploymentWhatIfParam
+                | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
-
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/managementgroup/dev.bicepparam"
-        }
-
-        It "The 'AzureCliCommand' property should include the '--deployment-subscription' parameter" {
-            $res.AzureCliCommand | Should -Be "az stack mg create --location westeurope --management-group-id mock-managementgroup-id --name default-stack --parameters $mockDirectory/deployments/stack/managementgroup/dev.bicepparam --yes --action-on-unmanage deleteResources --deny-settings-mode denyDelete --description `"`" --deployment-subscription mock-sub --tags `"`""
         }
     }
 
-    Context "When the stack uses the 'DeploymentWhatIf' parameter" {
-        BeforeAll {
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/stack/default/dev.bicepparam" -DeploymentWhatIf $true
-        }
+    # MARK: climprconfig.jsonc behavior
+    Context "Handle climprconfig.jsonc behavior correctly" {
+        It "Should handle <scenario> correctly" -TestCases @(
+            @{
+                scenario         = "no climprconfig and no deploymentconfig file"
+                climprConfig     = @{}
+                deploymentConfig = @{}
+                expected         = "westeurope" # Action default
+            }
+            @{
+                scenario         = "climprconfig action default override"
+                climprConfig     = @{ bicepDeployment = @{ location = 'swedencentral' } }
+                deploymentConfig = @{}
+                expected         = "swedencentral"
+            }
+            @{
+                scenario         = "deploymentconfig override action default"
+                climprConfig     = @{}
+                deploymentConfig = @{ location = 'swedencentral' }
+                expected         = "swedencentral"
+            }
+            @{
+                scenario         = "deploymentconfig override climprconfig"
+                climprConfig     = @{ bicepDeployment = @{ location = 'eastus' } }
+                deploymentConfig = @{ location = 'swedencentral' }
+                expected         = "swedencentral"
+            }
+        ) {
+            param ($scenario, $climprConfig, $deploymentConfig, $expected)
+            
+            $climprConfig | ConvertTo-Json | Set-Content -Path $climprConfigFile
+            $deploymentConfig | ConvertTo-Json | Set-Content -Path $configFile
 
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az stack sub validate --location westeurope --name default-stack --parameters $mockDirectory/deployments/stack/default/dev.bicepparam --action-on-unmanage deleteAll --deny-settings-mode denyDelete --description `"`" --tags `"`""
-        }
-    }
-
-    Context "When a climprconfig.jsonc file is specified" {
-        BeforeAll {
-            '{ "bicepDeployment": { "location": "swedencentral" } }' | Out-File "$mockDirectory/deployments/deployment/climprconfig.jsonc"
-            $script:res = ./src/Resolve-DeploymentConfig.ps1 @commonParam -DeploymentFilePath "$mockDirectory/deployments/deployment/default/dev.bicepparam"
-        }
-
-        AfterAll {
-            Remove-Item -Path "$mockDirectory/deployments/deployment/climprconfig.jsonc" -Force -Confirm:$false -ErrorAction SilentlyContinue
-        }
-
-        It "The 'AzureCliCommand' property should be correct" {
-            $res.AzureCliCommand | Should -Be "az deployment sub create --location swedencentral --name default-dev-$($script:shortHash) --parameters $mockDirectory/deployments/deployment/default/dev.bicepparam"
+            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+            $res.Location | Should -Be $expected
         }
     }
 }
