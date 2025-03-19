@@ -87,6 +87,76 @@ function Get-DeploymentConfig {
     $deploymentConfig
 }
 
+function Get-BicepFileReferences {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string]
+        $Path,
+
+        [Parameter(Mandatory)]
+        [string]
+        $ParentPath,
+
+        [string]
+        $BasePath = (Resolve-Path -Path ".").Path
+    )
+
+    $pathIsBicepReference = $Path -match "^(?:br|ts)[:\/].+?"
+    if ($pathIsBicepReference) {
+        Write-Debug "[Get-BicepFileReferences()] Found: $Path"
+        return $Path
+    }
+    
+    #* Resolve path local to the calling Bicep template
+    $parentFullPath = (Resolve-Path -Path $ParentPath).Path
+    Push-Location $parentFullPath
+    $fullPath = (Resolve-Path -Path $Path).Path
+    Pop-Location
+
+    #* Build relative paths and show debug info
+    Push-Location $BasePath
+    $relativePath = Resolve-Path -Relative -Path $fullPath
+    $relativeParentPath = Resolve-Path -Relative -Path $parentFullPath
+    Write-Debug "[Get-BicepFileReferences()] Started. Path: $relativePath. ParentPath: $relativeParentPath"
+    Write-Debug "[Get-BicepFileReferences()] Found: $relativePath"
+    Pop-Location
+
+    #* Build regex pattern
+    #* Pieces of the regex for better readability
+    $rxOptionalSpace = "(?:\s*)"
+    $rxSingleQuote = "(?:')"
+    $rxUsing = "(?:using(?:\s+))"
+    $rxExtends = "(?:extends(?:\s+))"
+    $rxModule = "(?:module(?:\s+)(?:.+?)(?:\s+))"
+    $rxFunctions = "(?:(?:loadFileAsBase64|loadJsonContent|loadYamlContent|loadTextContent)$rxOptionalSpace\()"
+
+    #* Complete regex
+    $regex = "(?:$rxUsing|$rxExtends|$rxModule|$rxFunctions)$rxSingleQuote(?:$rxOptionalSpace(.+?))$rxSingleQuote"
+
+    #* Set temporary relative location
+    Push-Location -Path $parentFullPath
+
+    #* Find all matches and recursively call itself for each match
+    if (Test-Path -Path $fullPath) {
+        $item = Get-Item -Path $fullPath -Force
+        
+        $content = Get-Content -Path $fullPath -Raw
+        $cleanContent = Remove-BicepComments -Content $content
+        ($cleanContent | Select-String -AllMatches -Pattern $regex).Matches.Groups | 
+        Where-Object { $_.Name -ne 0 } | 
+        Select-Object -ExpandProperty Value | 
+        Sort-Object -Unique | 
+        ForEach-Object { Get-BicepFileReferences -ParentPath $item.Directory.FullName -Path $_ -BasePath $BasePath }
+    }
+
+    #* Revert to previous location
+    Pop-Location
+
+    #* Return path
+    $relativePath
+}
+
 function Resolve-ParameterFileTarget {
     [CmdletBinding()]
     param (
