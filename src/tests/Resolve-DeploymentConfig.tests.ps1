@@ -5,17 +5,39 @@ BeforeAll {
     if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.7.0") {
         Install-PSResource -Name Bicep
     }
-    Import-Module $PSScriptRoot/../support-functions.psm1 -Force
+    Import-Module $PSScriptRoot/../DeployBicepHelpers.psm1 -Force
+
+    function New-FileStructure {
+        param (
+            [Parameter(Mandatory)]
+            [string] $Path,
+
+            [Parameter(Mandatory)]
+            [hashtable] $Structure
+        )
+        
+        if (!(Test-Path -Path $Path)) {
+            New-Item -Path $Path -ItemType Directory -Force | Out-Null
+        }
+    
+        foreach ($key in $Structure.Keys) {
+            $itemPath = Join-Path -Path $Path -ChildPath $key
+            if ($Structure[$key] -is [hashtable]) {
+                New-FileStructure -Path $itemPath -Structure $Structure[$key]
+            }
+            else {
+                Set-Content -Path $itemPath -Value $Structure[$key] -Force
+            }
+        }
+    }
 }
 
-Describe "Resolve-DeploymentConfig.ps1" {
-    # MARK: Pester setup
-    BeforeAll {
-        $script:shortHash = git rev-parse --short HEAD
-
-        $script:testRoot = Join-Path $TestDrive 'test'
+Describe "Resolve-DeploymentConfig" {
+    BeforeEach {
+        $script:testRoot = Join-Path $TestDrive 'mock'
         New-Item -Path $testRoot -ItemType Directory -Force | Out-Null
-        
+
+        # Create default deploymentconfig.jsonc file
         $script:defaultDeploymentConfigPath = Join-Path $testRoot "default.deploymentconfig.jsonc"
         $script:defaultDeploymentConfig = [ordered]@{
             '$schema'         = "https://raw.githubusercontent.com/climpr/climpr-schemas/main/schemas/v1.0.0/bicep-deployment/deploymentconfig.json#"
@@ -23,94 +45,91 @@ Describe "Resolve-DeploymentConfig.ps1" {
             'azureCliVersion' = "2.68.0"
         }
         $defaultDeploymentConfig | ConvertTo-Json | Out-File -FilePath $defaultDeploymentConfigPath
-        $script:commonParam = @{
-            Quiet                       = $true
-            Debug                       = $false
-            GitHubEventName             = "workflow_dispatch"
-            DefaultDeploymentConfigPath = $defaultDeploymentConfigPath
-        }
-    }
-
-    BeforeEach {
-        $script:climprConfigFile = Join-Path $testRoot 'climprconfig.jsonc'
-        $script:configFile = Join-Path $testRoot 'deploymentconfig.jsonc'
-        $script:bicepFile = Join-Path $testRoot 'main.bicep'
-        $script:paramFile = Join-Path $testRoot 'main.bicepparam'
-
-        "targetScope = 'subscription'" | Out-File -Path $bicepFile
-        "using 'main.bicep'" | Out-File -Path $paramFile
 
         $script:commonParams = @{
             DefaultDeploymentConfigPath = $defaultDeploymentConfigPath
             GitHubEventName             = "workflow_dispatch"
-            DeploymentFilePath          = $paramFile
             Quiet                       = $true
         }
     }
 
     AfterEach {
-        Remove-Item -Path $climprConfigFile -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path $configFile -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path $bicepFile -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path $paramFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $testRoot -Recurse -Force -ErrorAction SilentlyContinue -ProgressAction SilentlyContinue
     }
 
     # MARK: Input files
     Context "Handle input files correctly" {
         It "Should handle .bicep file correctly" {
-            $bicepFileRelativePath = Resolve-Path -Relative -Path $bicepFile
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams -DeploymentFilePath $bicepFile
-            $res.TemplateReference | Should -Be $bicepFileRelativePath
-            $res.ParameterFile | Should -BeNullOrEmpty
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep' = "targetScope = 'subscription'"
+            }
+            
+            $relativeRoot = Resolve-Path -Relative -Path $testRoot
+            $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/main.bicep"
+            $result.TemplateReference | Should -BeExactly "$relativeRoot/main.bicep"
+            $result.ParameterFile | Should -BeNullOrEmpty
         }
         
         It "Should handle .bicepparam file correctly" {
-            $paramFileRelativePath = Resolve-Path -Relative -Path $paramFile
-            "using 'main.bicep'" | Set-Content -Path $paramFile
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep'      = "targetScope = 'subscription'"
+                'prod.bicepparam' = "using 'main.bicep'"
+            }
             
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-            $res.TemplateReference | Should -Be "main.bicep"
-            $res.ParameterFile | Should -Be $paramFileRelativePath
+            $relativeRoot = Resolve-Path -Relative -Path $testRoot
+            $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
+            $result.TemplateReference | Should -BeExactly "main.bicep"
+            $result.ParameterFile | Should -BeExactly "$relativeRoot/prod.bicepparam"
         }
     }
 
     # MARK: Scopes
     Context "Handle scopes correctly" {
-        It "Should handle 'resourceGroup' scope correctly" {
-            "targetScope = 'resourceGroup'" | Set-Content -Path $bicepFile
-            @{ resourceGroupName = "mock-rg" } | ConvertTo-Json | Set-Content -Path $configFile
-
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-            $res.Scope | Should -Be "resourceGroup"
-        }
-
-        It "Should handle 'subscription' scope correctly" {
-            "targetScope = 'subscription'" | Set-Content -Path $bicepFile
-
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-            $res.Scope | Should -Be "subscription"
-        }
-
-        It "Should handle 'managementGroup' scope correctly" {
-            "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
-            @{ managementGroupId = "mock-mg" } | ConvertTo-Json | Set-Content -Path $configFile
-
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-            $res.Scope | Should -Be "managementGroup"
-        }
-
-        It "Should handle 'tenant' scope correctly" {
-            "targetScope = 'tenant'" | Set-Content -Path $bicepFile
-
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-            $res.Scope | Should -Be "tenant"
+        It "Should handle <scenario> correctly" -TestCases @(
+            @{
+                scenario = "'resourceGroup' scope"
+                expected = "resourceGroup"
+                mock     = @{
+                    'main.bicep'             = "targetScope = 'resourceGroup'"
+                    'deploymentconfig.jsonc' = @{ resourceGroupName = 'mock-rg' } | ConvertTo-Json
+                }
+            }
+            @{
+                scenario = "'subscription' scope"
+                expected = "subscription"
+                mock     = @{
+                    'main.bicep' = "targetScope = 'subscription'"
+                }
+            }
+            @{
+                scenario = "'managementGroup' scope"
+                expected = "managementGroup"
+                mock     = @{
+                    'main.bicep'             = "targetScope = 'managementGroup'"
+                    'deploymentconfig.jsonc' = @{ managementGroupId = 'mock-mg' } | ConvertTo-Json
+                }
+            }
+            @{
+                scenario = "'tenant' scope"
+                expected = "tenant"
+                mock     = @{
+                    'main.bicep' = "targetScope = 'tenant'"
+                }
+            }
+        ) {
+            param ($mock, $expected)
+            New-FileStructure -Path $testRoot -Structure $mock
+            $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/main.bicep"
+            $result.Scope | Should -BeExactly $expected
         }
 
         It "Should fail if target scope is 'tenant' and type is 'deploymentStack'" {
-            "targetScope = 'tenant'" | Set-Content -Path $bicepFile
-            @{ type = "deploymentStack" } | ConvertTo-Json | Set-Content -Path $configFile
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep'             = "targetScope = 'tenant'"
+                'deploymentconfig.jsonc' = @{ type = "deploymentStack" } | ConvertTo-Json
+            }
 
-            { ./src/Resolve-DeploymentConfig.ps1 @commonParams }
+            { Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/main.bicep" }
             | Should -Throw "Deployment stacks are not supported for tenant scoped deployments."
         }
     }
@@ -118,20 +137,21 @@ Describe "Resolve-DeploymentConfig.ps1" {
     # MARK: Remote templates
     Context "Handle direct .bicepparam remote template reference correctly" {
         It "Should handle remote Azure Container Registry (ACR) template correctly" {
-            "using 'br/public:avm/res/resources/resource-group:0.4.1'" | Set-Content -Path $paramFile
+            New-FileStructure -Path $testRoot -Structure @{
+                'prod.bicepparam' = "using 'br/public:avm/res/resources/resource-group:0.4.1'"
+            }
 
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-            $res.TemplateReference | Should -Be 'br/public:avm/res/resources/resource-group:0.4.1'
-            $res.Scope | Should -Be 'subscription'
+            $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
+            $result.TemplateReference | Should -BeExactly 'br/public:avm/res/resources/resource-group:0.4.1'
         }
 
         #? No authenticated pipeline to run test. Hence, template specs cannot be restored.
         # It "Should handle remote Template Specs correctly" {
-        #     "using 'ts:resourceId:tag'" | Set-Content -Path $paramFile
-        #     $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-        #     $res | ConvertTo-Json -Depth 10 | Write-Host
-        #     $res.TemplateReference | Should -Be 'br/public:avm/res/resources/resource-group:0.4.1'
-        #     $res.Scope | Should -Be 'subscription'
+        #     New-FileStructure -Path $testRoot -Structure @{
+        #         'prod.bicepparam' = "using 'ts:resourceId:tag'"
+        #     }
+        #     $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
+        #     $result.TemplateReference | Should -BeExactly 'ts:resourceId:tag'
         # }
     }
 
@@ -171,10 +191,13 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             ) {
                 param ($scenario, $deploymentConfig, $expected)
-
-                $deploymentConfig | ConvertTo-Json | Set-Content -Path $configFile
-                $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-                $res.Deploy | Should -Be $expected
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = $deploymentConfig | ConvertTo-Json
+                }
+                $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
+                $result.Deploy | Should -BeExactly $expected
             }
         }
     }
@@ -183,8 +206,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
     Context "When deployment is a normal deployment" {
         Context "When the deployment type is 'deployment'" {
             It "It should handle all properties correctly" {
-                $paramFileRelative = Resolve-Path -Relative -Path $paramFile
-                $deploymentName = "test-main-$shortHash" # Name of the temporary parent directory + 'main' from main.bicepparam + git short hash
+                New-FileStructure -Path $testRoot -Structure @{
+                    'testdeploy' = @{
+                        'main.bicep'      = "targetScope = 'subscription'"
+                        'prod.bicepparam' = "using 'main.bicep'"
+                    }
+                }
+
+                $paramFileRelative = Resolve-Path -Relative -Path "$testRoot/testdeploy/prod.bicepparam"
+                $deploymentName = "testdeploy-prod-$(git rev-parse --short HEAD)" # Name of the temporary parent directory + 'prod' from prod.bicepparam + git short hash
 
                 $properties = [ordered]@{
                     Deploy            = $true
@@ -200,9 +230,9 @@ Describe "Resolve-DeploymentConfig.ps1" {
                     AzureCliCommand   = "az deployment sub create --location westeurope --name $deploymentName --parameters $paramFileRelative"
                 }
                 
-                $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath $paramFileRelative
                 foreach ($key in $properties.Keys) {
-                    $res.$key | Should -Be $properties[$key]
+                    $result.$key | Should -BeExactly $properties[$key]
                 }
             }
         }
@@ -227,12 +257,17 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $deploymentWhatIf, $expected)
             
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'      = "targetScope = 'subscription'"
+                    'prod.bicepparam' = "using 'main.bicep'"
+                }
+
                 $deploymentWhatIfParam = @{}
                 if ($deploymentWhatIf) {
                     $deploymentWhatIfParam = @{ DeploymentWhatIf = $deploymentWhatIf }
                 }
 
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams @deploymentWhatIfParam
+                Resolve-DeploymentConfig @commonParams @deploymentWhatIfParam -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -242,8 +277,16 @@ Describe "Resolve-DeploymentConfig.ps1" {
     Context "When deployment is a Deployment stack" {
         Context "When the deployment type is 'deploymentStack'" {
             It "It should handle all properties correctly" {
-                $paramFileRelative = Resolve-Path -Relative -Path $paramFile
-                $deploymentName = "test-main-$shortHash" # Name of the temporary parent directory + 'main' from main.bicepparam + git short hash
+                New-FileStructure -Path $testRoot -Structure @{
+                    'testdeploy' = @{
+                        'main.bicep'             = "targetScope = 'subscription'"
+                        'prod.bicepparam'        = "using 'main.bicep'"
+                        'deploymentconfig.jsonc' = @{ type = "deploymentStack" } | ConvertTo-Json
+                    }
+                }
+
+                $paramFileRelative = Resolve-Path -Relative -Path "$testRoot/testdeploy/prod.bicepparam"
+                $deploymentName = "testdeploy-prod-$(git rev-parse --short HEAD)" # Name of the temporary parent directory + 'prod' from prod.bicepparam + git short hash
 
                 $properties = [ordered]@{
                     Deploy            = $true
@@ -258,12 +301,10 @@ Describe "Resolve-DeploymentConfig.ps1" {
                     ResourceGroupName = $null
                     AzureCliCommand   = "az stack sub create --location westeurope --name $deploymentName --parameters $paramFileRelative --yes --action-on-unmanage detachAll --deny-settings-mode none --description `"`" --tags `"`""
                 }
-                
-                @{ type = "deploymentStack" } | ConvertTo-Json | Set-Content -Path $configFile
 
-                $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath $paramFileRelative
                 foreach ($key in $properties.Keys) {
-                    $res.$key | Should -Be $properties[$key]
+                    $result.$key | Should -BeExactly $properties[$key]
                 }
             }
         }
@@ -293,12 +334,16 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $description, $expected)
                 
-                @{
-                    type        = "deploymentStack"
-                    description = $description
-                } | ConvertTo-Json | Set-Content -Path $configFile
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type        = "deploymentStack"
+                        description = $description
+                    } | ConvertTo-Json
+                }
                 
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -328,12 +373,16 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $bypassStackOutOfSyncError, $expected)
                 
-                $deploymentConfig + @{
-                    type                      = "deploymentStack"
-                    bypassStackOutOfSyncError = $bypassStackOutOfSyncError
-                } | ConvertTo-Json | Set-Content -Path $configFile
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type                      = "deploymentStack"
+                        bypassStackOutOfSyncError = $bypassStackOutOfSyncError
+                    } | ConvertTo-Json
+                }
                 
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -363,15 +412,19 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $applyToChildScopes, $expected)
                 
-                $deploymentConfig + @{
-                    type         = "deploymentStack"
-                    denySettings = @{
-                        mode               = "denyDelete"
-                        applyToChildScopes = $applyToChildScopes
-                    }
-                } | ConvertTo-Json | Set-Content -Path $configFile
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type         = "deploymentStack"
+                        denySettings = @{
+                            mode               = "denyDelete"
+                            applyToChildScopes = $applyToChildScopes
+                        }
+                    } | ConvertTo-Json
+                }
                 
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -406,15 +459,19 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $excludedActions, $expected)
                 
-                $deploymentConfig + @{
-                    type         = "deploymentStack"
-                    denySettings = @{
-                        mode            = "denyDelete"
-                        excludedActions = $excludedActions
-                    }
-                } | ConvertTo-Json | Set-Content -Path $configFile
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type         = "deploymentStack"
+                        denySettings = @{
+                            mode            = "denyDelete"
+                            excludedActions = $excludedActions
+                        }
+                    } | ConvertTo-Json
+                }
                 
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -449,15 +506,19 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $excludedPrincipals, $expected)
                 
-                $deploymentConfig + @{
-                    type         = "deploymentStack"
-                    denySettings = @{
-                        mode               = "denyDelete"
-                        excludedPrincipals = $excludedPrincipals
-                    }
-                } | ConvertTo-Json | Set-Content -Path $configFile
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type         = "deploymentStack"
+                        denySettings = @{
+                            mode               = "denyDelete"
+                            excludedPrincipals = $excludedPrincipals
+                        }
+                    } | ConvertTo-Json
+                }
                 
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -486,13 +547,17 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             ) {
                 param ($scenario, $actionOnUnmanage, $expected)
-            
-                $deploymentConfig + @{
-                    type             = "deploymentStack"
-                    actionOnUnmanage = $actionOnUnmanage
-                } | ConvertTo-Json | Set-Content -Path $configFile
-            
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type             = "deploymentStack"
+                        actionOnUnmanage = $actionOnUnmanage
+                    } | ConvertTo-Json
+                }
+                
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
 
@@ -516,16 +581,17 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 ) {
                     param ($scenario, $actionOnUnmanage, $expected)
                 
-                    $deploymentConfig + @{
-                        type              = "deploymentStack"
-                        managementGroupId = "mock-mg"
-                        actionOnUnmanage  = $actionOnUnmanage
-                    } | ConvertTo-Json | Set-Content -Path $configFile
-
-                    # Set target scope to managementGroup
-                    "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
+                    New-FileStructure -Path $testRoot -Structure @{
+                        'main.bicep'             = "targetScope = 'managementGroup'"
+                        'prod.bicepparam'        = "using 'main.bicep'"
+                        'deploymentconfig.jsonc' = @{
+                            type              = "deploymentStack"
+                            managementGroupId = "mock-mg"
+                            actionOnUnmanage  = $actionOnUnmanage
+                        } | ConvertTo-Json
+                    }
                 
-                    ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                    Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                     | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
                 }
             }
@@ -535,34 +601,42 @@ Describe "Resolve-DeploymentConfig.ps1" {
         Context "When handling stack 'tags' property" {
             It "Should handle <scenario> correctly" -TestCases @(
                 @{
-                    scenario = "no tags property"
-                    tags     = $null
-                    expected = '--tags ""'
+                    scenario         = "no tags property"
+                    deploymentConfig = @{}
+                    expected         = '--tags ""'
                 }
                 @{
-                    scenario = "empty tags"
-                    tags     = @{}
-                    expected = '--tags ""'
+                    scenario         = "null tags property"
+                    deploymentConfig = @{ tags = $null }
+                    expected         = '--tags ""'
                 }
                 @{
-                    scenario = "single tag"
-                    tags     = @{ "key" = "value" }
-                    expected = "--tags 'key=value'"
+                    scenario         = "empty tags"
+                    deploymentConfig = @{ tags = @{} }
+                    expected         = '--tags ""'
                 }
                 @{
-                    scenario = "multiple tags"
-                    tags     = [ordered]@{ "key1" = "value1"; "key2" = "value2" }
-                    expected = "--tags 'key1=value1' 'key2=value2'"
+                    scenario         = "single tag"
+                    deploymentConfig = @{ tags = @{ "key" = "value" } }
+                    expected         = "--tags 'key=value'"
+                }
+                @{
+                    scenario         = "multiple tags"
+                    deploymentConfig = @{ tags = [ordered]@{ "key1" = "value1"; "key2" = "value2" } }
+                    expected         = "--tags 'key1=value1' 'key2=value2'"
                 }
             ) {
-                param ($scenario, $tags, $expected)
+                param ($scenario, $deploymentConfig, $expected)
                 
-                @{
-                    type = "deploymentStack"
-                    tags = $tags
-                } | ConvertTo-Json | Set-Content -Path $configFile
-                
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type = "deploymentStack"
+                    } + $deploymentConfig | ConvertTo-Json
+                }
+            
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -593,29 +667,49 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $deploymentConfig, $expected)
                 
-                $deploymentConfig + @{
-                    type = "deploymentStack"
-                } | ConvertTo-Json | Set-Content -Path $configFile
-                
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type = "deploymentStack"
+                    } + $deploymentConfig | ConvertTo-Json
+                }
+            
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
 
             # TODO: Not supported yet
             # It "Should fail if 'deploymentResourceGroup' is specified and the scope is 'resourceGroup'" {
-            #     @{ type = "deploymentStack"; deploymentResourceGroup = "mock-rg"; resourceGroupName = "mock-rg" } | ConvertTo-Json | Set-Content -Path $configFile
-            #     "targetScope = 'resourceGroup'" | Set-Content -Path $bicepFile
 
-            #     $errorActionPreference = 'Stop'
-            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentResourceGroup' property is only supported when the target scope is 'resourceGroup'."
+            #     New-FileStructure -Path $testRoot -Structure @{
+            #         'main.bicep'             = "targetScope = 'resourceGroup'"
+            #         'prod.bicepparam'        = "using 'main.bicep'"
+            #         'deploymentconfig.jsonc' = @{
+            #             type                    = "deploymentStack"
+            #             resourceGroupName       = "mock-rg" 
+            #             deploymentResourceGroup = "mock-rg"
+            #         } | ConvertTo-Json
+            #     }
+
+            #     { Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam" }
+            #     | Should -Throw "The 'deploymentResourceGroup' property is only supported when the target scope is 'resourceGroup'."
             # }
 
             # It "Should fail if 'deploymentResourceGroup' is specified and the scope is 'managementGroup'" {
-            #     @{ type = "deploymentStack"; deploymentResourceGroup = "mock-rg"; managementGroupId = "mock-mg" } | ConvertTo-Json | Set-Content -Path $configFile
-            #     "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
 
-            #     $errorActionPreference = 'Stop'
-            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentResourceGroup' property is only supported when the target scope is 'resourceGroup'."
+            #     New-FileStructure -Path $testRoot -Structure @{
+            #         'main.bicep'             = "targetScope = 'managementGroup'"
+            #         'prod.bicepparam'        = "using 'main.bicep'"
+            #         'deploymentconfig.jsonc' = @{
+            #             type                    = "deploymentStack"
+            #             managementGroupId       = "mock-mg" 
+            #             deploymentResourceGroup = "mock-rg"
+            #         } | ConvertTo-Json
+            #     }
+
+            #     { Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam" }
+            #     | Should -Throw "The 'deploymentResourceGroup' property is only supported when the target scope is 'resourceGroup'."
             # }
         }
 
@@ -645,31 +739,47 @@ Describe "Resolve-DeploymentConfig.ps1" {
             ) {
                 param ($scenario, $deploymentConfig, $expected)
                 
-                $deploymentConfig + @{
-                    type              = "deploymentStack"
-                    managementGroupId = 'mock-mg'
-                } | ConvertTo-Json | Set-Content -Path $configFile
-                "targetScope = 'managementGroup'" | Set-Content -Path $bicepFile
-
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'managementGroup'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{
+                        type              = "deploymentStack"
+                        managementGroupId = 'mock-mg'
+                    } + $deploymentConfig | ConvertTo-Json
+                }
+            
+                Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
 
             # TODO: Not supported yet
             # It "Should fail if 'deploymentSubscription' is specified and the scope is 'resourceGroup'" {
-            #     @{ type = "deploymentStack"; deploymentSubscription = "mock-sub"; resourceGroupName = "mock-rg" } | ConvertTo-Json | Set-Content -Path $configFile
-            #     "targetScope = 'resourceGroup'" | Set-Content -Path $bicepFile
+            #     New-FileStructure -Path $testRoot -Structure @{
+            #         'main.bicep'             = "targetScope = 'resourceGroup'"
+            #         'prod.bicepparam'        = "using 'main.bicep'"
+            #         'deploymentconfig.jsonc' = @{
+            #             type                   = "deploymentStack"
+            #             resourceGroupName      = "mock-rg" 
+            #             deploymentSubscription = "mock-sub"
+            #         } | ConvertTo-Json
+            #     }
 
-            #     $errorActionPreference = 'Stop'
-            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentSubscription' property is only supported when the target scope is 'managementGroup'."
+            #     { Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam" }
+            #     | Should -Throw "The 'deploymentSubscription' property is only supported when the target scope is 'managementGroup'."
             # }
 
             # It "Should fail if 'deploymentResourceGroup' is specified and the scope is 'subscription'" {
-            #     @{ type = "deploymentStack"; deploymentSubscription = "mock-sub" } | ConvertTo-Json | Set-Content -Path $configFile
-            #     "targetScope = 'subscription'" | Set-Content -Path $bicepFile
+            #     New-FileStructure -Path $testRoot -Structure @{
+            #         'main.bicep'             = "targetScope = 'subscription'"
+            #         'prod.bicepparam'        = "using 'main.bicep'"
+            #         'deploymentconfig.jsonc' = @{
+            #             type                   = "deploymentStack"
+            #             deploymentSubscription = "mock-sub"
+            #         } | ConvertTo-Json
+            #     }
 
-            #     $errorActionPreference = 'Stop'
-            #     { ./src/Resolve-DeploymentConfig.ps1 @commonParams } | Should -Throw "The 'deploymentSubscription' property is only supported when the target scope is 'managementGroup'."
+            #     { Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam" }
+            #     | Should -Throw "The 'deploymentSubscription' property is only supported when the target scope is 'managementGroup'."
             # }
         }
 
@@ -692,16 +802,19 @@ Describe "Resolve-DeploymentConfig.ps1" {
                 }
             ) {
                 param ($scenario, $deploymentWhatIf, $expected)
-            
-                $deploymentConfig + @{ type = "deploymentStack" } | ConvertTo-Json | Set-Content -Path $configFile
 
-                # Create deployment parameter object
+                New-FileStructure -Path $testRoot -Structure @{
+                    'main.bicep'             = "targetScope = 'subscription'"
+                    'prod.bicepparam'        = "using 'main.bicep'"
+                    'deploymentconfig.jsonc' = @{ type = "deploymentStack" } | ConvertTo-Json
+                }
+
                 $deploymentWhatIfParam = @{}
                 if ($deploymentWhatIf) {
                     $deploymentWhatIfParam = @{ DeploymentWhatIf = $deploymentWhatIf }
                 }
 
-                ./src/Resolve-DeploymentConfig.ps1 @commonParams @deploymentWhatIfParam
+                Resolve-DeploymentConfig @commonParams @deploymentWhatIfParam -DeploymentFilePath "$testRoot/prod.bicepparam"
                 | Select-Object -ExpandProperty "AzureCliCommand" | Should -Match $expected
             }
         }
@@ -737,11 +850,15 @@ Describe "Resolve-DeploymentConfig.ps1" {
         ) {
             param ($scenario, $climprConfig, $deploymentConfig, $expected)
             
-            $climprConfig | ConvertTo-Json | Set-Content -Path $climprConfigFile
-            $deploymentConfig | ConvertTo-Json | Set-Content -Path $configFile
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep'             = "targetScope = 'subscription'"
+                'prod.bicepparam'        = "using 'main.bicep'"
+                'climprconfig.jsonc'     = $climprConfig | ConvertTo-Json
+                'deploymentconfig.jsonc' = $deploymentConfig | ConvertTo-Json
+            }
 
-            $res = ./src/Resolve-DeploymentConfig.ps1 @commonParams
-            $res.Location | Should -Be $expected
+            $result = Resolve-DeploymentConfig @commonParams -DeploymentFilePath "$testRoot/prod.bicepparam"
+            $result.Location | Should -BeExactly $expected
         }
     }
 }

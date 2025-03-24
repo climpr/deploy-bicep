@@ -52,8 +52,11 @@ runs:
         #* Set debug preference from runner configuration
         $DebugPreference = [bool]$env:debug ? "Continue" : "SilentlyContinue"
 
+        #* Import module
+        Import-Module "$($env:actionPath)/src/DeployBicepHelpers.psm1" -Force
+
         #* Parse deployment
-        $deploymentConfig = & "$($env:actionPath)/src/Resolve-DeploymentConfig.ps1" `
+        $deploymentConfig = Resolve-DeploymentConfig `
           -DeploymentFilePath $env:deploymentFilePath `
           -DefaultDeploymentConfigPath "$($env:actionPath)/default.deploymentconfig.json" `
           -GitHubEventName $env:eventName `
