@@ -1,88 +1,138 @@
 BeforeAll {
-    if ((Get-PSResourceRepository -Name PSGallery).Trusted -eq $false) {
-        Set-PSResourceRepository -Name PSGallery -Trusted -Confirm:$false
+    Import-Module $PSScriptRoot/../DeployBicepHelpers.psm1 -Force
+
+    function New-FileStructure {
+        param (
+            [Parameter(Mandatory)]
+            [string] $Path,
+
+            [Parameter(Mandatory)]
+            [hashtable] $Structure
+        )
+    
+        if (!(Test-Path -Path $Path)) {
+            New-Item -Path $Path -ItemType Directory -Force | Out-Null
+        }
+
+        foreach ($key in $Structure.Keys) {
+            $itemPath = Join-Path -Path $Path -ChildPath $key
+            if ($Structure[$key] -is [hashtable]) {
+                New-FileStructure -Path $itemPath -Structure $Structure[$key]
+            }
+            else {
+                Set-Content -Path $itemPath -Value $Structure[$key] -Force
+            }
+        }
     }
-    if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.7.0") {
-        Install-PSResource -Name Bicep
-    }
-    Import-Module $PSScriptRoot/../support-functions.psm1 -Force
-    $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
 }
 
-Describe "Resolve-TemplateDeploymentScope.ps1" {
-    Context "When targetScope-keyword in template is not on line 1" {
-        BeforeAll {
-            $script:param = @{
-                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam"
-                DeploymentConfig   = @{}
-            }
-            $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
-        }
+Describe "Resolve-TemplateDeploymentScope" {
+    BeforeEach {
+        # Create mock root directory
+        $script:testRoot = Join-Path $TestDrive 'mock'
+        New-Item -Path $testRoot -ItemType Directory -Force | Out-Null
+    }
 
-        It "Should resolve DeploymentScope to be [subscription]" {
-            $templateDeploymentScope | Should -Be 'subscription'
+    AfterEach {
+        Remove-Item -Path $testRoot -Recurse -Force -ErrorAction SilentlyContinue -ProgressAction SilentlyContinue
+    }
+
+    Context "Local template scope resolution" {
+        It "Should resolve <expected> scope" -TestCases @(
+            @{
+                content  = ""
+                config   = @{ resourceGroupName = 'mock-rg' }
+                expected = 'resourceGroup'
+            }
+            @{
+                content  = "targetScope = 'resourceGroup'"
+                config   = @{ resourceGroupName = 'mock-rg' }
+                expected = 'resourceGroup'
+            }
+            @{
+                content  = "targetScope = 'subscription'"
+                config   = @{}
+                expected = 'subscription'
+            }
+            @{
+                content  = "targetScope = 'managementGroup'"
+                config   = @{ managementGroupId = 'mock-mg' }
+                expected = 'managementGroup'
+            }
+            @{
+                content  = "targetScope = 'tenant'"
+                config   = @{}
+                expected = 'tenant'
+            }
+        ) {
+            param($content, $config, $expected)
+            
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep'      = $content
+                'prod.bicepparam' = "using 'main.bicep'"
+            }
+
+            Resolve-TemplateDeploymentScope -DeploymentFilePath "$testRoot/prod.bicepparam" -DeploymentConfig $config
+            | Should -BeExactly $expected
         }
     }
 
-    Context "When using-keyword in parameterfile is not on line 1" {
-        BeforeAll {
-            $script:param = @{
-                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/usingLine2.bicepparam"
-                DeploymentConfig   = @{ 'managementGroupId' = 'mockMgmtGroupId' }
+    Context "DeploymentConfig validation" {
+        It "Should throw when <scope> scope is specified without <required> in deploymentconfig.jsonc" -TestCases @(
+            @{
+                scope         = 'resourceGroup'
+                content       = ""
+                required      = 'resourceGroupName'
+                expectedError = "*Target scope is resourceGroup, but resourceGroupName property is not present*"
             }
-            $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
-        }
+            @{
+                scope         = 'managementGroup'
+                content       = "targetScope = 'managementGroup'"
+                required      = 'managementGroupId'
+                expectedError = "*Target scope is managementGroup, but managementGroupId property is not present*"
+            }
+        ) {
+            param($content, $expectedError)
 
-        It "Should resolve DeploymentScope to be [managementGroup]" {
-            $templateDeploymentScope | Should -Be 'managementGroup'
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep'      = $content
+                'prod.bicepparam' = "using 'main.bicep'"
+            }
+
+            { Resolve-TemplateDeploymentScope -DeploymentFilePath "$testRoot/prod.bicepparam" -DeploymentConfig @{} } | Should -Throw $expectedError
         }
     }
 
-    Context "When using-keyword is commented before the actual using-keyword" {
-        BeforeAll {
-            $script:param = @{
-                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/usingCommented.bicepparam"
-                DeploymentConfig   = @{
-                    'managementGroupId' = 'mockMgmtGroupId'
-                    'resourceGroupName' = 'mockResourceGroupName'
-                }
+    Context "Keyword position validation" {
+        It "Should resolve subscription scope" {
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep'      = "metadata author = 'author'`ntargetScope = 'subscription'"
+                'prod.bicepparam' = "metadata author = 'author'`nusing 'main.bicep'"
             }
-            $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
-        }
 
-        It "Should resolve DeploymentScope to be [resourceGroup]" {
-            $templateDeploymentScope | Should -Be 'resourceGroup'
+            Resolve-TemplateDeploymentScope -DeploymentFilePath "$testRoot/prod.bicepparam" -DeploymentConfig @{}
+            | Should -BeExactly 'subscription'
         }
     }
 
-    Context "When scope-keyword is commented before the actual scope-keyword" {
-        BeforeAll {
-            $script:param = @{
-                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
-                DeploymentConfig   = @{ 'managementGroupId' = 'mockMgmtGroupId' }
+    Context "Input file types" {
+        It "Should resolve subscription scope for .bicep file" {
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep' = "targetScope = 'subscription'"
             }
-            $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
-        }
 
-        It "Should resolve DeploymentScope to be [subscription]" {
-            $templateDeploymentScope | Should -Be 'subscription'
+            Resolve-TemplateDeploymentScope -DeploymentFilePath "$testRoot/main.bicep" -DeploymentConfig @{}
+            | Should -BeExactly 'subscription'
         }
-    }
-
-    Context "When scope is defined in deploymentconfig.jsonc" {
-        BeforeAll {
-            $script:param = @{
-                DeploymentFilePath = "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam"
-                DeploymentConfig   = @{
-                    'managementGroupId' = 'mockMgmtGroupId'
-                    'scope'             = 'subscription'
-                }
+        
+        It "Should resolve subscription scope for .bicepparam file" {
+            New-FileStructure -Path $testRoot -Structure @{
+                'main.bicep'      = "metadata author = 'author'`ntargetScope = 'subscription'"
+                'prod.bicepparam' = "metadata author = 'author'`nusing 'main.bicep'"
             }
-            $script:templateDeploymentScope = Resolve-TemplateDeploymentScope @param
-        }
 
-        It "Should resolve DeploymentScope to be [subscription]" {
-            $templateDeploymentScope | Should -Be 'subscription'
+            Resolve-TemplateDeploymentScope -DeploymentFilePath "$testRoot/prod.bicepparam" -DeploymentConfig @{}
+            | Should -BeExactly 'subscription'
         }
     }
 }

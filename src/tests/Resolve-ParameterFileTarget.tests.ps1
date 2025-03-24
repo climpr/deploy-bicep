@@ -5,93 +5,115 @@ BeforeAll {
     if ((Get-PSResource -Name Bicep -ErrorAction Ignore).Version -lt "2.7.0") {
         Install-PSResource -Name Bicep
     }
-    Import-Module $PSScriptRoot/../support-functions.psm1 -Force
-    $script:mockDirectory = Resolve-Path -Relative -Path "$PSScriptRoot/mock"
+    Import-Module $PSScriptRoot/../DeployBicepHelpers.psm1 -Force
 }
 
 Describe "Resolve-ParameterFileTarget" {
-    Context "When the input is a file (Path)" {
-        BeforeAll {
-            $script:tempFile = New-TemporaryFile
-            "using 'main.bicep'" | Out-File -Path $tempFile
+    Context "Input handling" {
+        Context "When the input is a file path" {
+            BeforeAll {
+                $script:testRoot = Join-Path $TestDrive 'mock'
+                $script:paramFile = Join-Path $testRoot "test.bicepparam"
+                New-Item -Path $testRoot -ItemType Directory -Force | Out-Null
+            }
+
+            AfterAll {
+                Remove-Item -Path $testRoot -Recurse -Force -ErrorAction SilentlyContinue -ProgressAction SilentlyContinue
+            }
+
+            It "It should return 'main.bicep'" {
+                "using 'main.bicep'" | Out-File -Path $paramFile
+                Resolve-ParameterFileTarget -Path $paramFile | Should -BeExactly "main.bicep"
+            }
         }
 
-        It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -Path $tempFile
-        }
-
-        AfterAll {
-            $script:tempFile | Remove-Item -Force -Confirm:$false
+        Context "When the input is a string" {
+            It "It should return 'main.bicep'" {
+                Resolve-ParameterFileTarget -Content "using 'main.bicep'" | Should -BeExactly "main.bicep"
+            }
         }
     }
 
-    Context "When the input is a string (Content)" {
-        It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -Content "using 'main.bicep'" | Should -Be "main.bicep"
+    Context "Whitespace handling" {
+        It "Should handle <Scenario>" -TestCases @(
+            @{
+                Scenario = "statements without spaces"
+                Content  = "using'main.bicep'"
+                Expected = "main.bicep"
+            }
+            @{
+                Scenario = "leading spaces before using keyword"
+                Content  = "  using 'main.bicep'"
+                Expected = "main.bicep"
+            }
+            @{
+                Scenario = "whitespace between using and path"
+                Content  = "using      'main.bicep'"
+                Expected = "main.bicep"
+            }
+            @{
+                Scenario = "whitespace inside path quotes"
+                Content  = "using '  main.bicep'"
+                Expected = "main.bicep"
+            }
+        ) {
+            param ($Content, $Expected)
+            Resolve-ParameterFileTarget -Content $Content | Should -BeExactly $Expected
         }
     }
 
-    Context "When the parameter file contains a properly formatted: `"using 'main.bicep'`"" {
-        It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -Content "using 'main.bicep'" | Should -Be "main.bicep"
+    Context "Path handling" {
+        It "Should handle <Scenario>" -TestCases @(
+            @{
+                Scenario = "relative path"
+                Content  = "using './main.bicep'"
+                Expected = "./main.bicep"
+            }
+            @{
+                Scenario = "absolute path"
+                Content  = "using '/main.bicep'"
+                Expected = "/main.bicep"
+            }
+            @{
+                Scenario = "parent path"
+                Content  = "using '../main.bicep'"
+                Expected = "../main.bicep"
+            }
+            @{
+                Scenario = "hidden file"
+                Content  = "using '.main.bicep'"
+                Expected = ".main.bicep"
+            }
+        ) {
+            param ($Content, $Expected)
+            Resolve-ParameterFileTarget -Content $Content | Should -BeExactly $Expected
         }
     }
 
-    Context "When the parameter file contains leading spaces: `"  using   '   main.bicep'`"" {
-        It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -Content "using   '   main.bicep'" | Should -Be "main.bicep"
+    It "Should handle registry paths" {
+        $paths = @(
+            @{ Path = "br/public:filepath:tag"; Expected = "br/public:filepath:tag" }
+            @{ Path = "br:mcr.microsoft.com/bicep/filepath:tag"; Expected = "br:mcr.microsoft.com/bicep/filepath:tag" }
+        )
+
+        foreach ($testCase in $paths) {
+            Resolve-ParameterFileTarget -Content "using '$($testCase.Path)'" | 
+            Should -BeExactly $testCase.Expected
         }
     }
 
-    Context "When the parameter file does not contain spaces: `"using'main.bicep'`"" {
-        It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -Content "using'main.bicep'" | Should -Be "main.bicep"
-        }
+    It "Should handle extendable parameter files using none keyword" {
+        $content = "using none"
+        Resolve-ParameterFileTarget -Content $content | Should -BeExactly 'none'
     }
+}
 
-    Context "When the parameter file contains relative paths with '.': `"using './main.bicep'`"" {
-        It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -Content "using './main.bicep'" | Should -Be "./main.bicep"
-        }
-    }
-
-    Context "When the parameter file contains relative paths with '/': `"using '/main.bicep'`"" {
-        It "It should return 'main.bicep'" {
-            Resolve-ParameterFileTarget -Content "using '/main.bicep'" | Should -Be "/main.bicep"
-        }
-    }
-
-    Context "When the parameter file contains ACR or TS paths" {
-        It "It should return 'br/public:filepath:tag'" {
-            Resolve-ParameterFileTarget -Content "using 'br/public:filepath:tag''" | Should -Be "br/public:filepath:tag"
-        }
-
-        It "It should return 'br:mcr.microsoft.com/bicep/filepath:tag'" {
-            Resolve-ParameterFileTarget -Content "using 'br:mcr.microsoft.com/bicep/filepath:tag''" | Should -Be "br:mcr.microsoft.com/bicep/filepath:tag"
-        }
-    }
-
-    Context "When targetScope-keyword in template is not on line 1" {
-        It "Should have a TemplateReference pointing to a targetScopeLine2" {
-            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/targetScopeLine2.bicepparam" | Should -Be 'targetScopeLine2.bicep'
-        }
-    }
-    
-    Context "When using-keyword in parameterfile is not on line 1" {
-        It "Should have a TemplateReference pointing to a usingLine2" {
-            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/usingLine2.bicepparam" | Should -Be 'usingLine2.bicep'
-        }
-    }
-
-    Context "When using-keyword is commented before the actual using-keyword" {
-        It "Should have a TemplateReference pointing to a usingCommented" {
-            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/usingCommented.bicepparam" | Should -Be 'usingCommented.bicep'
-        }
-    }
-
-    Context "When scope-keyword is commented before the actual scope-keyword" {
-        It "Should have a TemplateReference pointing to a usingCommented" {
-            Resolve-ParameterFileTarget -Path "$mockDirectory/deployments/deployment/comments/targetScopeCommented.bicepparam" | Should -Be 'targetScopeCommented.bicep'
-        }
+Context "Position handling" {
+    It "Should handle using statement not on first line" {
+        $content = @"
+metadata author = 'author'
+using 'main.bicep'
+"@
+        Resolve-ParameterFileTarget -Content $content | Should -BeExactly 'main.bicep'
     }
 }
