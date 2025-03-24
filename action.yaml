@@ -23,7 +23,7 @@ runs:
       uses: climpr/install-psmodules@v1
       with:
         modules: |
-          Bicep:2.7.0
+          Bicep:2.8.0
 
     - name: Resolve parameter
       id: get-input
