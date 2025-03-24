@@ -47,7 +47,7 @@ runs:
         actionPath: ${{ github.action_path }}
         debug: ${{ runner.debug }}
       run: |
-        #* Resolve-DeploymentConfig.ps1
+        #* Resolve-DeploymentConfig
 
         #* Set debug preference from runner configuration
         $DebugPreference = [bool]$env:debug ? "Continue" : "SilentlyContinue"
