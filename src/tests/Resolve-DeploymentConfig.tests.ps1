@@ -242,17 +242,17 @@ Describe "Resolve-DeploymentConfig" {
             It "Should handle <scenario> correctly" -TestCases @(
                 @{
                     scenario = "no 'DeploymentWhatIf' parameter"
-                    expected = "^(?!.*--what-if).*$"
+                    expected = "^(?!.*--what-if --what-if-exclude-change-types Ignore NoChange).*$"
                 }
                 @{
                     scenario         = "false 'DeploymentWhatIf' parameter"
                     deploymentWhatIf = $false
-                    expected         = "^(?!.*--what-if).*$"
+                    expected         = "^(?!.*--what-if --what-if-exclude-change-types Ignore NoChange).*$"
                 }
                 @{
                     scenario         = "true 'DeploymentWhatIf' parameter"
                     deploymentWhatIf = $true
-                    expected         = "--what-if"
+                    expected         = "--what-if --what-if-exclude-change-types Ignore NoChange"
                 }
             ) {
                 param ($scenario, $deploymentWhatIf, $expected)
