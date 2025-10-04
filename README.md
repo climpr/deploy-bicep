@@ -300,7 +300,7 @@ on:
 jobs:
   deploy-bicep:
     name: Deploy sample-deployment to prod
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     environment:
       name: prod
     permissions:
@@ -360,7 +360,7 @@ on:
 
 jobs:
   get-bicep-deployments:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read # Required for repo checkout
 
@@ -383,7 +383,7 @@ jobs:
   deploy-bicep-parallel:
     name: "[${{ matrix.Name }}][${{ matrix.Environment }}] Deploy"
     if: "${{ needs.get-bicep-deployments.outputs.deployments != '' && needs.get-bicep-deployments.outputs.deployments != '[]' }}"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs:
       - get-bicep-deployments
     strategy:
