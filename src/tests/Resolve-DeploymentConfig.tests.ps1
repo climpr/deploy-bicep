@@ -44,6 +44,7 @@ Describe "Resolve-DeploymentConfig" {
             '$schema'         = "https://raw.githubusercontent.com/climpr/climpr-schemas/main/schemas/v1.0.0/bicep-deployment/deploymentconfig.json#"
             'location'        = "westeurope"
             'azureCliVersion' = "latest"
+            'bicepVersion'    = "latest"
         }
         $defaultDeploymentConfig | ConvertTo-Json | Out-File -FilePath $defaultDeploymentConfigPath
 
@@ -220,6 +221,7 @@ Describe "Resolve-DeploymentConfig" {
                 $properties = [ordered]@{
                     Deploy            = $true
                     AzureCliVersion   = $defaultDeploymentConfig.azureCliVersion
+                    BicepVersion      = $defaultDeploymentConfig.bicepVersion
                     Type              = "deployment"
                     Scope             = "subscription"
                     ParameterFile     = $paramFileRelative
@@ -292,6 +294,7 @@ Describe "Resolve-DeploymentConfig" {
                 $properties = [ordered]@{
                     Deploy            = $true
                     AzureCliVersion   = $defaultDeploymentConfig.azureCliVersion
+                    BicepVersion      = $defaultDeploymentConfig.bicepVersion
                     Type              = "deploymentStack"
                     Scope             = "subscription"
                     ParameterFile     = $paramFileRelative
