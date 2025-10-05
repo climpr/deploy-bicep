@@ -128,6 +128,7 @@ These options are common for all scenarios
 | disabled        | boolean | false    | Setting this to true disables the deployment regardless of the triggering event.                                                                                 |
 | triggers        | object  | false    | Configures settings per GitHub event trigger. See: [triggers](#triggers)                                                                                         |
 | azureCliVersion | string  | false    | The Azure CLI version to use.                                                                                                                                    |
+| bicepVersion    | string  | false    | The Bicep version to use.                                                                                                                                        |
 | type            | string  | false    | Specifies the execution type. Either `deployment` or `deploymentStack`. Default: `deployment`                                                                    |
 | scope           | string  | false    | Specifies the scope of the deployment or deploymentStack. Valid options: `resourceGroup`, `subscription`, `managementGroup` or `tenant`. Default: `subscription` |
 
@@ -300,7 +301,7 @@ on:
 jobs:
   deploy-bicep:
     name: Deploy sample-deployment to prod
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     environment:
       name: prod
     permissions:
@@ -360,7 +361,7 @@ on:
 
 jobs:
   get-bicep-deployments:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read # Required for repo checkout
 
@@ -383,7 +384,7 @@ jobs:
   deploy-bicep-parallel:
     name: "[${{ matrix.Name }}][${{ matrix.Environment }}] Deploy"
     if: "${{ needs.get-bicep-deployments.outputs.deployments != '' && needs.get-bicep-deployments.outputs.deployments != '[]' }}"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs:
       - get-bicep-deployments
     strategy:

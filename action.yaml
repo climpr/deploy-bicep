@@ -22,8 +22,7 @@ runs:
     - name: Install PS Modules
       uses: climpr/install-psmodules@v1
       with:
-        modules: |
-          Bicep:2.8.0
+        modules: Bicep
 
     - name: Resolve parameter
       id: get-input
@@ -73,6 +72,7 @@ runs:
           "scope"                = "Scope"
           "azure-cli-version"    = "AzureCliVersion"
           "azure-cli-command"    = "AzureCliCommand"
+          "bicep-version"        = "BicepVersion"
         }
 
         foreach ($output in $outputs.Keys) {
@@ -85,6 +85,7 @@ runs:
       if: steps.resolve-deploymentconfig.outputs.deploy == 'true'
       env:
         AZURE_CLI_COMMAND: ${{ steps.resolve-deploymentconfig.outputs.azure-cli-command }}
+        BICEP_VERSION: ${{ steps.resolve-deploymentconfig.outputs.bicep-version }}
         WHAT_IF: ${{ inputs.what-if }}
         DEBUG: ${{ runner.debug == '1' }}
       with:
@@ -170,6 +171,18 @@ runs:
           if [[ "$DEBUG" == 'true' && "$AZURE_CLI_COMMAND" != *"--debug"* ]]; then
             AZURE_CLI_COMMAND="$AZURE_CLI_COMMAND --debug"
           fi
+
+          #* Install Az CLI bicep extension
+          if [ "${BICEP_VERSION,,}" = "latest" ]; then
+            az bicep install
+          else
+            az bicep install --version "$BICEP_VERSION"
+          fi
+
+          #* Print versions
+          echo "Azure CLI version:"
+          az version
+          az bicep version
 
           #* Print command
           # Convert to multiline with 2-space indentation and 1 space before backslash
