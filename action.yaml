@@ -174,9 +174,6 @@ runs:
           echo "Azure CLI version:"
           az version
 
-          echo "Azure CLI embedded Bicep version:"
-          az bicep version
-
           echo "Bicep version:"
           bicep --version
 
