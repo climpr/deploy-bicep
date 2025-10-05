@@ -174,9 +174,6 @@ runs:
           echo "Azure CLI version:"
           az version
 
-          echo "Bicep version:"
-          bicep --version
-
           #* Print command
           # Convert to multiline with 2-space indentation and 1 space before backslash
           formatted_cmd=$(echo "$AZURE_CLI_COMMAND" | sed 's/--/\n  --/g')
@@ -193,6 +190,9 @@ runs:
 
           #* Write the result to console
           echo "$deployment_output"
+
+          echo "Bicep version:"
+          az bicep version
 
           #* Write success annotation
           if echo "$deployment_output" | jq -e . >/dev/null 2>&1; then
