@@ -170,6 +170,16 @@ runs:
             AZURE_CLI_COMMAND="$AZURE_CLI_COMMAND --debug"
           fi
 
+          #* Print versions
+          echo "Azure CLI version:"
+          az version
+
+          echo "Azure CLI embedded Bicep version:"
+          az bicep version
+
+          echo "Bicep version:"
+          bicep --version
+
           #* Print command
           # Convert to multiline with 2-space indentation and 1 space before backslash
           formatted_cmd=$(echo "$AZURE_CLI_COMMAND" | sed 's/--/\n  --/g')
