@@ -182,8 +182,6 @@ runs:
           #* Print versions
           echo "Azure CLI version:"
           az version
-
-          echo "Bicep version:"
           az bicep version
 
           #* Print command
