@@ -16,6 +16,11 @@ inputs:
     required: false
     default: "false"
 
+  validate-bicep-snapshot:
+    description: "[Experimental] Setting this to true will run bicep snapshot in validate mode. This expects an existing snapshot file."
+    required: false
+    default: "false"
+
 runs:
   using: composite
   steps:
@@ -258,6 +263,16 @@ runs:
         rm -f commitMessageAndId.md
         rm -f stdout.log
         rm -f stderr.log
+
+    - name: "[Experimental] Bicep snapshot validate"
+      id: bicep-snapshot-validate
+      if: inputs.validate-bicep-snapshot == 'true' && endsWith(inputs.deployment-file-path, '.bicepparam')
+      shell: bash
+      run: |
+        bicepparam=${{ inputs.deployment-file-path }}
+        snapshot=${bicepparam%.bicepparam}.snapshot.json # remove .bicepparam and add suffix .snapshot.json
+        if [ ! -f ${snapshot} ]; then; echo "No existing snapshot file to validate against can be found! Aborting." && exit 0; fi
+        bicep snapshot ${{ inputs.deployment-file-path }} --mode validate ## --subscription-id xyz --resource-group abc --location swedencentral
 
 outputs:
   deployment-output:
